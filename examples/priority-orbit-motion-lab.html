@@ -1,0 +1,1191 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Priority Orbit · Motion Lab</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172033;
+        --muted: #677187;
+        --line: #dfe4ed;
+        --surface: rgba(255, 255, 255, .82);
+        --accent: #5a56e9;
+        --accent-soft: #eeedff;
+        --green: #16795c;
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 12% 8%, rgba(134, 129, 255, .18), transparent 25rem),
+          radial-gradient(circle at 82% 88%, rgba(75, 190, 159, .13), transparent 28rem),
+          #f5f6fa;
+      }
+      button, input, select, textarea { font: inherit; }
+      button, select { cursor: pointer; }
+      button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+        outline: 3px solid rgba(90, 86, 233, .35);
+        outline-offset: 2px;
+      }
+      .app-shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 42px 348px 70px 0; }
+      .masthead { display: grid; gap: 16px; margin-bottom: 26px; }
+      .eyebrow {
+        display: inline-flex;
+        width: max-content;
+        align-items: center;
+        gap: 8px;
+        color: #4843c7;
+        font-size: 12px;
+        font-weight: 760;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+      .eyebrow::before {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 5px rgba(90, 86, 233, .11);
+        content: "";
+      }
+      h1 { max-width: 760px; margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .95; letter-spacing: -.065em; }
+      .lead { max-width: 650px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.7; }
+      .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; }
+      .stat { padding: 14px 15px; border: 1px solid rgba(213, 218, 230, .82); border-radius: 16px; background: rgba(255, 255, 255, .6); }
+      .stat strong { display: block; font-size: 21px; letter-spacing: -.04em; }
+      .stat span { color: var(--muted); font-size: 11px; }
+      .tracks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .track {
+        min-width: 0;
+        padding: 18px;
+        border: 1px solid rgba(213, 218, 230, .9);
+        border-radius: 24px;
+        background: var(--surface);
+        box-shadow: 0 10px 35px rgba(41, 49, 72, .06);
+        backdrop-filter: blur(16px);
+      }
+      .track[data-active-component] { border-color: rgba(90, 86, 233, .35); box-shadow: 0 14px 40px rgba(68, 63, 191, .1); }
+      .track-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+      .track-kicker { color: var(--muted); font-size: 11px; font-weight: 720; text-transform: uppercase; letter-spacing: .1em; }
+      .track h2 { margin: 5px 0 0; font-size: 19px; letter-spacing: -.035em; }
+      .track-count { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; color: #4843c7; background: var(--accent-soft); font-size: 12px; font-weight: 760; }
+      .task-list { display: grid; gap: 9px; min-height: 238px; }
+      .task-card {
+        position: relative;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 11px;
+        align-items: center;
+        min-width: 0;
+        min-height: 68px;
+        padding: 11px 12px;
+        border: 1px solid #e3e6ee;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 6px 18px rgba(42, 51, 75, .055);
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+        will-change: transform, opacity;
+      }
+      .task-card:active { cursor: grabbing; }
+      .task-card[data-selected] { border-color: rgba(90, 86, 233, .64); box-shadow: 0 0 0 3px rgba(90, 86, 233, .1), 0 10px 24px rgba(57, 52, 175, .1); }
+      .task-card.is-pointer-drag { opacity: .16; }
+      .task-card.is-keyboard-grab { border-color: #15916d; box-shadow: 0 0 0 3px rgba(21, 145, 109, .13); }
+      .grabber { display: grid; gap: 3px; width: 12px; color: #a9b0bf; }
+      .grabber::before, .grabber::after { height: 2px; border-radius: 999px; background: currentColor; content: ""; box-shadow: 0 4px currentColor; }
+      .task-copy { min-width: 0; }
+      .task-copy strong { display: block; overflow: hidden; font-size: 13px; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+      .task-copy span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+      .pill { padding: 5px 7px; border-radius: 999px; color: #5d6474; background: #f1f3f7; font-size: 9px; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; }
+      .pill.hot { color: #9a4437; background: #fff0ed; }
+      .pill.cool { color: #17725a; background: #e9f8f2; }
+      .interaction-note { display: flex; align-items: center; gap: 9px; margin: 15px 2px 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+      kbd { padding: 2px 5px; border: 1px solid #d6dae3; border-bottom-width: 2px; border-radius: 5px; background: #fff; color: #4e5769; font: 10px ui-monospace, monospace; }
+      .live-status { min-height: 20px; margin: 18px 2px 0; color: var(--green); font-size: 12px; }
+      .drag-ghost {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 3000;
+        margin: 0;
+        pointer-events: none;
+        opacity: .96;
+        transform-origin: center;
+        box-shadow: 0 28px 65px rgba(31, 40, 70, .22);
+        will-change: transform;
+      }
+      .drag-ghost[data-invalid] { filter: grayscale(.45); opacity: .72; }
+      .motion-lab {
+        position: fixed;
+        z-index: 2000;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        width: 314px;
+        max-height: calc(100dvh - 40px);
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid rgba(215, 228, 255, .14);
+        border-radius: 20px;
+        color: #edf3ff;
+        background: rgba(15, 22, 37, .94);
+        box-shadow: 0 24px 70px rgba(15, 22, 40, .28), inset 0 1px rgba(255, 255, 255, .07);
+        backdrop-filter: blur(18px) saturate(1.2);
+        font-size: 11px;
+      }
+      .motion-lab[data-positioned] { right: auto; }
+      .motion-lab[data-dragging] { user-select: none; }
+      .lab-header { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 12px 13px; }
+      .lab-handle { display: grid; flex: 1; gap: 2px; min-width: 0; cursor: grab; touch-action: none; }
+      .motion-lab[data-dragging] .lab-handle { cursor: grabbing; }
+      .lab-handle strong { font-size: 13px; letter-spacing: -.02em; }
+      .lab-handle span { overflow: hidden; color: #91a0bb; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+      .lab-toggle, .lab-button, .lab-chip { min-height: 28px; border: 1px solid rgba(220, 231, 255, .14); border-radius: 9px; color: #dce8ff; background: rgba(255, 255, 255, .06); }
+      .lab-toggle { padding: 0 9px; border-radius: 999px; font-size: 10px; }
+      .lab-toggle:hover, .lab-button:hover, .lab-chip:hover { background: rgba(125, 157, 227, .2); }
+      .lab-body {
+        display: grid;
+        min-height: 0;
+        gap: 12px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 13px;
+        border-top: 1px solid rgba(220, 231, 255, .1);
+        scrollbar-width: thin;
+        scrollbar-color: #53617a #151e30;
+      }
+      .motion-lab:not([data-open]) .lab-body { display: none; }
+      .lab-section { display: grid; gap: 7px; }
+      .lab-label { color: #cad7ed; font-size: 10px; font-weight: 720; }
+      .rate-row, .mode-row, .preset-row { display: grid; gap: 6px; }
+      .rate-row { grid-template-columns: repeat(4, 1fr); }
+      .mode-row { grid-template-columns: repeat(2, 1fr); }
+      .preset-row { grid-template-columns: repeat(3, 1fr); }
+      .lab-chip { padding: 0 6px; font-size: 10px; }
+      .lab-chip[data-active] { border-color: rgba(157, 188, 255, .66); color: #fff; background: rgba(100, 136, 230, .3); }
+      .lab-hint, .lab-note { margin: 0; color: #8d9db8; font-size: 9px; line-height: 1.5; }
+      .lab-select, .lab-number, .lab-code { border: 1px solid rgba(220, 231, 255, .16); border-radius: 8px; color: #edf3ff; background: rgba(255, 255, 255, .065); }
+      .lab-select { width: 100%; height: 31px; padding: 0 8px; }
+      .lab-select option { color: #172033; background: #fff; }
+      .control-group { display: grid; gap: 9px; }
+      .control { display: grid; grid-template-columns: 1fr auto; gap: 5px 9px; align-items: center; }
+      .control label { color: #cad7ed; font-weight: 680; }
+      .control small { color: #8292ae; font-size: 9px; }
+      .lab-number { width: 72px; height: 27px; padding: 0 7px; text-align: right; font-variant-numeric: tabular-nums; }
+      .lab-range { grid-column: 1 / -1; width: 100%; accent-color: #93b4ff; }
+      .cubic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+      .cubic-grid .lab-number { width: 58px; }
+      .cubic-editor-card { display: grid; gap: 6px; padding: 8px; border: 1px solid rgba(213, 226, 255, .1); border-radius: 11px; background: rgba(112, 141, 199, .055); }
+      .cubic-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #c4d2e9; font-size: 9px; }
+      .cubic-editor-head span { color: #8494af; font-variant-numeric: tabular-nums; }
+      .cubic-editor { display: block; width: 100%; height: 124px; overflow: visible; border-radius: 8px; background: rgba(7, 12, 23, .28); touch-action: none; }
+      .cubic-axis { stroke: rgba(205, 220, 249, .13); stroke-width: 1; stroke-dasharray: 2 3; }
+      .cubic-guide { stroke: rgba(147, 180, 255, .45); stroke-width: 1.4; }
+      .cubic-control-path { fill: none; stroke: #9dbcff; stroke-width: 2.5; stroke-linecap: round; }
+      .cubic-anchor { fill: #74849f; }
+      .cubic-handle { cursor: grab; fill: #f4f8ff; stroke: #7ea4ff; stroke-width: 3; filter: drop-shadow(0 3px 6px rgba(77, 119, 221, .42)); }
+      .cubic-handle:hover, .cubic-handle:focus { fill: #fff; stroke: #bad0ff; outline: none; }
+      .cubic-handle:focus-visible { stroke-width: 5; }
+      .cubic-handle[data-dragging] { cursor: grabbing; fill: #dce8ff; }
+      .preview-track { position: relative; height: 30px; overflow: hidden; border: 1px solid rgba(213, 226, 255, .1); border-radius: 999px; background: linear-gradient(90deg, rgba(125, 157, 227, .16), rgba(125, 157, 227, .03)); }
+      .preview-track::after { position: absolute; top: 6px; right: 12px; bottom: 6px; width: 1px; background: rgba(147, 180, 255, .58); content: ""; }
+      .preview-dot { position: absolute; top: 6px; left: 8px; width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #b6cdff 44%, #7198ed); box-shadow: 0 3px 12px rgba(85, 129, 229, .65); will-change: transform; }
+      .curve-card { display: grid; gap: 5px; padding: 8px; border: 1px solid rgba(213, 226, 255, .1); border-radius: 11px; background: rgba(112, 141, 199, .055); }
+      .curve-head { display: flex; justify-content: space-between; gap: 8px; color: #c4d2e9; font-size: 9px; }
+      .curve-head span { color: #8494af; font-variant-numeric: tabular-nums; }
+      .motion-curve { display: block; width: 100%; height: 82px; overflow: visible; }
+      .curve-grid { stroke: rgba(205, 220, 249, .13); stroke-width: 1; stroke-dasharray: 2 3; }
+      .curve-target { stroke: rgba(147, 180, 255, .46); stroke-width: 1; stroke-dasharray: 4 3; }
+      .curve-path { fill: none; stroke: #9dbcff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+      .lab-button { width: 100%; padding: 0 9px; font-size: 10px; }
+      .export-block { border-top: 1px solid rgba(220, 231, 255, .1); padding-top: 10px; }
+      .export-block summary { cursor: pointer; color: #cad7ed; font-weight: 700; }
+      .export-content { display: grid; gap: 8px; padding-top: 10px; }
+      .lab-code { display: block; width: 100%; min-height: 155px; resize: vertical; padding: 9px; color: #c7ddff; font: 10px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; overflow: auto; }
+      .export-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+      [hidden] { display: none !important; }
+      @media (max-width: 900px) {
+        .app-shell { width: min(100% - 28px, 720px); padding-right: 0; padding-bottom: 410px; }
+        .motion-lab { top: auto; right: 12px; bottom: 12px; width: min(340px, calc(100vw - 24px)); max-height: min(62dvh, 620px); }
+      }
+      @media (max-width: 620px) {
+        .app-shell { width: min(100% - 22px, 480px); padding-top: 26px; }
+        h1 { font-size: 44px; }
+        .stats { grid-template-columns: repeat(3, 1fr); }
+        .stat { padding: 11px; }
+        .stat strong { font-size: 17px; }
+        .tracks { grid-template-columns: 1fr; }
+        .task-list { min-height: 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; transition-duration: .001ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="masthead">
+        <span class="eyebrow">Priority Orbit</span>
+        <h1>Make the next move feel inevitable.</h1>
+        <p class="lead">A small planning surface for testing motion decisions. Drag within a track, or use the keyboard. The lab controls each task and each real effect independently.</p>
+      </header>
+      <section class="stats" aria-label="今日概览">
+        <article class="stat"><strong>6</strong><span>active decisions</span></article>
+        <article class="stat"><strong>2</strong><span>priority tracks</span></article>
+        <article class="stat"><strong>12</strong><span>motion profiles</span></article>
+      </section>
+      <section class="tracks" aria-label="任务优先级轨道">
+        <article class="track" data-component="focus">
+          <header class="track-head"><div><span class="track-kicker">Track 01</span><h2>Focus now</h2></div><span class="track-count">3</span></header>
+          <div class="task-list" data-task-list="focus">
+            <div class="task-card" data-motion-target="focus-brief" tabindex="0" role="button" aria-label="Launch brief，按空格抓取"><span class="grabber" aria-hidden="true"></span><span class="task-copy"><strong>Launch brief</strong><span>Align product story · 24 min</span></span><span class="pill hot">Now</span></div>
+            <div class="task-card" data-motion-target="focus-metrics" tabindex="0" role="button" aria-label="Review metrics，按空格抓取"><span class="grabber" aria-hidden="true"></span><span class="task-copy"><strong>Review metrics</strong><span>Activation signal · 18 min</span></span><span class="pill">Next</span></div>
+            <div class="task-card" data-motion-target="focus-reply" tabindex="0" role="button" aria-label="Reply to studio，按空格抓取"><span class="grabber" aria-hidden="true"></span><span class="task-copy"><strong>Reply to studio</strong><span>Motion handoff · 12 min</span></span><span class="pill cool">Quick</span></div>
+          </div>
+          <p class="interaction-note"><kbd>Space</kbd><span>抓取任务，再用 ↑ / ↓ 排序；再次按 Space 放下。</span></p>
+        </article>
+        <article class="track" data-component="later">
+          <header class="track-head"><div><span class="track-kicker">Track 02</span><h2>Shape later</h2></div><span class="track-count">3</span></header>
+          <div class="task-list" data-task-list="later">
+            <div class="task-card" data-motion-target="later-notes" tabindex="0" role="button" aria-label="Cluster notes，按空格抓取"><span class="grabber" aria-hidden="true"></span><span class="task-copy"><strong>Cluster notes</strong><span>Research fragments · 36 min</span></span><span class="pill">Later</span></div>
+            <div class="task-card" data-motion-target="later-prototype" tabindex="0" role="button" aria-label="Prototype empty state，按空格抓取"><span class="grabber" aria-hidden="true"></span><span class="task-copy"><strong>Prototype empty state</strong><span>Two visual directions · 45 min</span></span><span class="pill hot">Deep</span></div>
+            <div class="task-card" data-motion-target="later-copy" tabindex="0" role="button" aria-label="Tighten release copy，按空格抓取"><span class="grabber" aria-hidden="true"></span><span class="task-copy"><strong>Tighten release copy</strong><span>Final language pass · 20 min</span></span><span class="pill cool">Light</span></div>
+          </div>
+          <p class="interaction-note"><kbd>Esc</kbd><span>取消键盘拖拽并恢复原顺序。面板慢放不影响指针跟手。</span></p>
+        </article>
+      </section>
+      <p class="live-status" data-live-status aria-live="polite">已选择 Launch brief · 列表重排。</p>
+    </main>
+
+    <aside class="motion-lab" data-open aria-label="Prototype Motion Lab">
+      <header class="lab-header">
+        <div class="lab-handle" data-lab-handle tabindex="0" aria-label="拖动动画面板；方向键微调位置"><strong>Prototype Motion Lab</strong><span data-lab-subtitle>Focus now · Launch brief · 列表重排</span></div>
+        <button class="lab-toggle" data-lab-toggle type="button" aria-expanded="true">收起</button>
+      </header>
+      <div class="lab-body">
+        <section class="lab-section">
+          <span class="lab-label">预览速度</span>
+          <div class="rate-row" role="group" aria-label="预览播放速度">
+            <button class="lab-chip" data-playback-rate="1" data-active aria-pressed="true" type="button">1×</button>
+            <button class="lab-chip" data-playback-rate="0.75" aria-pressed="false" type="button">0.75×</button>
+            <button class="lab-chip" data-playback-rate="0.5" aria-pressed="false" type="button">0.5×</button>
+            <button class="lab-chip" data-playback-rate="0.25" aria-pressed="false" type="button">0.25×</button>
+          </div>
+          <p class="lab-hint">只改变预览和自动归位速度；不改参数、导出或指针位置。</p>
+        </section>
+        <section class="lab-section">
+          <label class="lab-label" for="component-select">组件</label><select id="component-select" class="lab-select" data-component-select></select>
+          <label class="lab-label" for="target-select">元素</label><select id="target-select" class="lab-select" data-target-select></select>
+          <label class="lab-label" for="effect-select">真实动效层</label><select id="effect-select" class="lab-select" data-effect-select></select>
+        </section>
+        <section class="lab-section">
+          <span class="lab-label">动画模式</span>
+          <div class="mode-row" role="group" aria-label="动画模式">
+            <button class="lab-chip" data-motion-mode="spring" data-active aria-pressed="true" type="button">Spring</button>
+            <button class="lab-chip" data-motion-mode="cubic" aria-pressed="false" type="button">Cubic Bézier</button>
+          </div>
+        </section>
+        <section class="control-group" data-controls="spring">
+          <div class="control"><label for="spring-response-number">响应时间 <small>ms</small></label><input id="spring-response-number" class="lab-number" data-spring-number="response" type="number" min="180" max="900" step="1" /><input class="lab-range" data-spring-range="response" type="range" min="180" max="900" step="1" aria-label="响应时间" /></div>
+          <div class="control"><label for="spring-damping-number">阻尼系数</label><input id="spring-damping-number" class="lab-number" data-spring-number="dampingFraction" type="number" min="0.4" max="1.2" step="0.01" /><input class="lab-range" data-spring-range="dampingFraction" type="range" min="0.4" max="1.2" step="0.01" aria-label="阻尼系数" /></div>
+          <div class="control"><label for="spring-velocity-number">初速度</label><input id="spring-velocity-number" class="lab-number" data-spring-number="initialVelocity" type="number" min="-8" max="8" step="0.25" /><input class="lab-range" data-spring-range="initialVelocity" type="range" min="-8" max="8" step="0.25" aria-label="初速度" /></div>
+          <div class="preset-row" aria-label="Spring presets"><button class="lab-chip" data-spring-preset="snappy" type="button">Snappy</button><button class="lab-chip" data-spring-preset="natural" type="button">Natural</button><button class="lab-chip" data-spring-preset="bouncy" type="button">Bouncy</button></div>
+        </section>
+        <section class="control-group" data-controls="cubic" hidden>
+          <div class="control"><label for="cubic-duration-number">动画时长 <small>ms</small></label><input id="cubic-duration-number" class="lab-number" data-cubic-number="duration" type="number" min="80" max="2000" step="1" /><input class="lab-range" data-cubic-range="duration" type="range" min="80" max="2000" step="1" aria-label="Cubic 动画时长" /></div>
+          <div class="cubic-grid">
+            <div class="control"><label for="cubic-x1">X1</label><input id="cubic-x1" class="lab-number" data-cubic-number="x1" type="number" min="0" max="1" step="0.01" /><input class="lab-range" data-cubic-range="x1" type="range" min="0" max="1" step="0.01" aria-label="X1" /></div>
+            <div class="control"><label for="cubic-y1">Y1</label><input id="cubic-y1" class="lab-number" data-cubic-number="y1" type="number" min="-1" max="2" step="0.01" /><input class="lab-range" data-cubic-range="y1" type="range" min="-1" max="2" step="0.01" aria-label="Y1" /></div>
+            <div class="control"><label for="cubic-x2">X2</label><input id="cubic-x2" class="lab-number" data-cubic-number="x2" type="number" min="0" max="1" step="0.01" /><input class="lab-range" data-cubic-range="x2" type="range" min="0" max="1" step="0.01" aria-label="X2" /></div>
+            <div class="control"><label for="cubic-y2">Y2</label><input id="cubic-y2" class="lab-number" data-cubic-number="y2" type="number" min="-1" max="2" step="0.01" /><input class="lab-range" data-cubic-range="y2" type="range" min="-1" max="2" step="0.01" aria-label="Y2" /></div>
+          </div>
+          <div class="preset-row" aria-label="Cubic presets"><button class="lab-chip" data-cubic-preset="ease" type="button">Ease</button><button class="lab-chip" data-cubic-preset="out" type="button">Ease Out</button><button class="lab-chip" data-cubic-preset="overshoot" type="button">Overshoot</button></div>
+          <div class="cubic-editor-card" data-cubic-editor>
+            <div class="cubic-editor-head"><strong>Cubic 曲柄</strong><span>X 0–1 · Y −1–2</span></div>
+            <svg class="cubic-editor" data-cubic-editor-svg viewBox="0 0 260 124" role="group" aria-label="Cubic Bézier 控制点编辑器">
+              <line class="cubic-axis" x1="10" x2="250" y1="79.33" y2="79.33"></line>
+              <line class="cubic-axis" x1="10" x2="250" y1="44.67" y2="44.67"></line>
+              <line class="cubic-guide" data-cubic-guide="1" x1="10" y1="79.33" x2="10" y2="79.33"></line>
+              <line class="cubic-guide" data-cubic-guide="2" x1="250" y1="44.67" x2="250" y2="44.67"></line>
+              <path class="cubic-control-path" data-cubic-control-path d=""></path>
+              <circle class="cubic-anchor" cx="10" cy="79.33" r="3"></circle>
+              <circle class="cubic-anchor" cx="250" cy="44.67" r="3"></circle>
+              <circle class="cubic-handle" data-cubic-handle="1" cx="10" cy="79.33" r="7" role="slider" tabindex="0" aria-label="控制点 1" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0" aria-valuetext="X 0.00，Y 0.00" aria-describedby="cubic-handle-help"></circle>
+              <circle class="cubic-handle" data-cubic-handle="2" cx="250" cy="44.67" r="7" role="slider" tabindex="0" aria-label="控制点 2" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1" aria-valuetext="X 1.00，Y 1.00" aria-describedby="cubic-handle-help"></circle>
+            </svg>
+            <p class="lab-hint" id="cubic-handle-help">拖动曲柄同时调节 X/Y；方向键微调，Shift + 方向键加速。</p>
+          </div>
+        </section>
+        <section class="lab-section">
+          <div class="preview-track" aria-hidden="true"><span class="preview-dot" data-preview-dot></span></div>
+          <button class="lab-button" data-replay type="button">播放当前动效</button>
+          <div class="curve-card">
+            <div class="curve-head"><strong data-curve-title>Spring 响应曲线</strong><span data-curve-caption>0–1216 ms</span></div>
+            <svg class="motion-curve" viewBox="0 0 260 88" role="img" aria-label="当前动画响应曲线"><line class="curve-grid" x1="0" x2="260" y1="78" y2="78"></line><line class="curve-target" data-curve-target x1="0" x2="260" y1="18" y2="18"></line><polyline class="curve-path" data-motion-curve points=""></polyline></svg>
+          </div>
+          <p class="lab-note" data-lab-note>响应时间描述弹簧频率，不等于总完成时长。</p>
+        </section>
+        <details class="export-block">
+          <summary>代码导出</summary>
+          <div class="export-content">
+            <label class="lab-label" for="export-stack">技术栈</label>
+            <select id="export-stack" class="lab-select" data-export-stack><option value="web">Web JavaScript</option><option value="react">React Motion</option><option value="swiftui">SwiftUI</option><option value="compose">Jetpack Compose</option></select>
+            <textarea class="lab-code" data-export-code readonly spellcheck="false"></textarea>
+            <p class="lab-note" data-export-filename></p>
+            <div class="export-actions"><button class="lab-button" data-copy-export type="button">复制</button><button class="lab-button" data-download-export type="button">下载</button></div>
+            <p class="lab-note" data-export-status aria-live="polite"></p>
+          </div>
+        </details>
+      </div>
+    </aside>
+
+    <script>
+      (function () {
+        'use strict';
+        const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const profileStorageKey = 'priority-orbit-motion-profiles-v1';
+        const layoutStorageKey = 'priority-orbit-motion-layout-v1';
+        const springDefaults = { response: 0.38, dampingFraction: 0.78, initialVelocity: 0 };
+        const cubicDefaults = { duration: 360, x1: 0.22, y1: 0.8, x2: 0.28, y2: 1 };
+        const springPresets = {
+          snappy: { response: 0.24, dampingFraction: 0.94, initialVelocity: 0 },
+          natural: { response: 0.38, dampingFraction: 0.78, initialVelocity: 0 },
+          bouncy: { response: 0.52, dampingFraction: 0.56, initialVelocity: 0 }
+        };
+        const cubicPresets = {
+          ease: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 },
+          out: { x1: 0.16, y1: 1, x2: 0.3, y2: 1 },
+          overshoot: { x1: 0.2, y1: 0.9, x2: 0.25, y2: 1.22 }
+        };
+        const motionRegistry = {
+          focus: {
+            label: 'Focus now',
+            targets: {
+              'focus-brief': { label: 'Launch brief', effects: { reflow: { label: '列表重排', speed: 1.08 }, landing: { label: '松手落位', speed: 1 } } },
+              'focus-metrics': { label: 'Review metrics', effects: { reflow: { label: '列表重排', speed: 1.08 }, landing: { label: '松手落位', speed: 1 } } },
+              'focus-reply': { label: 'Reply to studio', effects: { reflow: { label: '列表重排', speed: 1.08 }, landing: { label: '松手落位', speed: 1 } } }
+            }
+          },
+          later: {
+            label: 'Shape later',
+            targets: {
+              'later-notes': { label: 'Cluster notes', effects: { reflow: { label: '列表重排', speed: 1.08 }, landing: { label: '松手落位', speed: 1 } } },
+              'later-prototype': { label: 'Prototype empty state', effects: { reflow: { label: '列表重排', speed: 1.08 }, landing: { label: '松手落位', speed: 1 } } },
+              'later-copy': { label: 'Tighten release copy', effects: { reflow: { label: '列表重排', speed: 1.08 }, landing: { label: '松手落位', speed: 1 } } }
+            }
+          }
+        };
+        function profileKey({ componentId, targetId, effectId }) {
+          return componentId + '/' + targetId + '/' + effectId;
+        }
+        function finite(source, key, fallback) {
+          const value = Number(source && source[key]);
+          return Number.isFinite(value) ? value : fallback;
+        }
+        function normalizeSpring(source) {
+          return {
+            response: clamp(finite(source, 'response', springDefaults.response), 0.18, 0.9),
+            dampingFraction: clamp(finite(source, 'dampingFraction', springDefaults.dampingFraction), 0.4, 1.2),
+            initialVelocity: clamp(finite(source, 'initialVelocity', springDefaults.initialVelocity), -8, 8)
+          };
+        }
+        function normalizeCubic(source) {
+          return {
+            duration: Math.round(clamp(finite(source, 'duration', cubicDefaults.duration), 80, 2000)),
+            x1: clamp(finite(source, 'x1', cubicDefaults.x1), 0, 1),
+            y1: clamp(finite(source, 'y1', cubicDefaults.y1), -1, 2),
+            x2: clamp(finite(source, 'x2', cubicDefaults.x2), 0, 1),
+            y2: clamp(finite(source, 'y2', cubicDefaults.y2), -1, 2)
+          };
+        }
+        function normalizeProfile(source) {
+          return {
+            mode: source && source.mode === 'cubic' ? 'cubic' : 'spring',
+            spring: normalizeSpring(source && source.spring),
+            cubic: normalizeCubic(source && source.cubic)
+          };
+        }
+        function loadStoredProfiles() {
+          try { return JSON.parse(localStorage.getItem(profileStorageKey) || '{}'); }
+          catch (error) { return {}; }
+        }
+        function createProfiles(source) {
+          const result = {};
+          Object.entries(motionRegistry).forEach(function ([componentId, component]) {
+            result[componentId] = {};
+            Object.entries(component.targets).forEach(function ([targetId, target]) {
+              result[componentId][targetId] = {};
+              Object.keys(target.effects).forEach(function (effectId) {
+                const saved = source && source[componentId] && source[componentId][targetId] && source[componentId][targetId][effectId];
+                result[componentId][targetId][effectId] = normalizeProfile(saved);
+              });
+            });
+          });
+          return result;
+        }
+        let profiles = createProfiles(loadStoredProfiles());
+        let playbackRate = 1;
+        let active = { componentId: 'focus', targetId: 'focus-brief', effectId: 'reflow' };
+        let previewCancel = null;
+        function saveProfiles() {
+          try { localStorage.setItem(profileStorageKey, JSON.stringify(profiles)); }
+          catch (error) { setStatus('浏览器阻止了本地存储；本次参数仍然有效。'); }
+        }
+        function currentProfile() { return profiles[active.componentId][active.targetId][active.effectId]; }
+        function capturedProfile(componentId, targetId, effectId) { return normalizeProfile(profiles[componentId][targetId][effectId]); }
+        function currentEffect() { return motionRegistry[active.componentId].targets[active.targetId].effects[active.effectId]; }
+        function cubicCoordinate(t, a, b) { return 3 * Math.pow(1 - t, 2) * t * a + 3 * (1 - t) * t * t * b + t * t * t; }
+        function cubicProgress(fraction, cubic) {
+          if (fraction <= 0) return 0;
+          if (fraction >= 1) return 1;
+          let low = 0;
+          let high = 1;
+          for (let index = 0; index < 32; index += 1) {
+            const t = (low + high) / 2;
+            if (cubicCoordinate(t, cubic.x1, cubic.x2) < fraction) low = t;
+            else high = t;
+          }
+          return cubicCoordinate((low + high) / 2, cubic.y1, cubic.y2);
+        }
+        function resolveSpring(profile, speed) {
+          const response = clamp(profile.spring.response / (speed || 1), 0.12, 1.2);
+          const omega = 2 * Math.PI / response;
+          return { mass: 1, stiffness: omega * omega, damping: 2 * profile.spring.dampingFraction * omega, initialVelocity: profile.spring.initialVelocity };
+        }
+        function runProgress(profile, speed, onUpdate, onComplete) {
+          const snapshot = normalizeProfile(profile);
+          if (reduceMotion.matches) {
+            onUpdate(1);
+            if (onComplete) onComplete();
+            return function () {};
+          }
+          let frameId = 0;
+          let cancelled = false;
+          if (snapshot.mode === 'cubic') {
+            let elapsed = 0;
+            let lastTime = performance.now();
+            function cubicFrame(now) {
+              if (cancelled) return;
+              elapsed += Math.min(Math.max(now - lastTime, 0), 32) * playbackRate;
+              lastTime = now;
+              const fraction = Math.min(1, elapsed / snapshot.cubic.duration);
+              onUpdate(cubicProgress(fraction, snapshot.cubic));
+              if (fraction >= 1) {
+                if (onComplete) onComplete();
+                return;
+              }
+              frameId = requestAnimationFrame(cubicFrame);
+            }
+            frameId = requestAnimationFrame(cubicFrame);
+          } else {
+            const spring = resolveSpring(snapshot, speed);
+            const fixedStep = 1 / 240;
+            let progress = 0;
+            let velocity = spring.initialVelocity;
+            let accumulator = 0;
+            let total = 0;
+            let lastTime = performance.now();
+            function springFrame(now) {
+              if (cancelled) return;
+              accumulator += Math.min(Math.max(now - lastTime, 0) / 1000, 0.032) * playbackRate;
+              lastTime = now;
+              let settled = false;
+              while (accumulator + 1e-10 >= fixedStep) {
+                accumulator = Math.max(0, accumulator - fixedStep);
+                const force = -spring.stiffness * (progress - 1);
+                const dampingForce = -spring.damping * velocity;
+                velocity += (force + dampingForce) * fixedStep;
+                progress += velocity * fixedStep;
+                total += fixedStep;
+                if ((Math.abs(velocity) < 0.015 && Math.abs(progress - 1) < 0.015) || total > 4) {
+                  progress = 1;
+                  settled = true;
+                  break;
+                }
+              }
+              onUpdate(progress);
+              if (settled) {
+                if (onComplete) onComplete();
+                return;
+              }
+              frameId = requestAnimationFrame(springFrame);
+            }
+            frameId = requestAnimationFrame(springFrame);
+          }
+          return function () { cancelled = true; cancelAnimationFrame(frameId); };
+        }
+        const runningByElement = new WeakMap();
+        function startElementMotion(element, effectId, from, to, onUpdate, onComplete) {
+          const componentId = element.closest('[data-component]').dataset.component;
+          const targetId = element.dataset.motionTarget;
+          const profile = capturedProfile(componentId, targetId, effectId);
+          const speed = motionRegistry[componentId].targets[targetId].effects[effectId].speed;
+          const existing = runningByElement.get(element);
+          if (existing) existing();
+          const cancel = runProgress(profile, speed, function (progress) {
+            onUpdate(from + (to - from) * progress);
+          }, function () {
+            runningByElement.delete(element);
+            if (onComplete) onComplete();
+          });
+          runningByElement.set(element, cancel);
+          return cancel;
+        }
+        function captureRects(list) {
+          return new Map(Array.from(list.children).map(function (element) { return [element, element.getBoundingClientRect()]; }));
+        }
+        function animateReflow(list, beforeRects) {
+          Array.from(list.children).forEach(function (element) {
+            if (element.classList.contains('is-pointer-drag')) return;
+            const before = beforeRects.get(element);
+            const after = element.getBoundingClientRect();
+            if (!before) return;
+            const deltaX = before.left - after.left;
+            const deltaY = before.top - after.top;
+            if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) return;
+            element.style.transform = 'translate3d(' + deltaX + 'px,' + deltaY + 'px,0)';
+            startElementMotion(element, 'reflow', 0, 1, function (progress) {
+              element.style.transform = 'translate3d(' + (deltaX * (1 - progress)) + 'px,' + (deltaY * (1 - progress)) + 'px,0)';
+            }, function () { element.style.transform = ''; });
+          });
+        }
+        function animateLanding(card, ghost, fromX, fromY, onComplete) {
+          const componentId = card.closest('[data-component]').dataset.component;
+          const targetId = card.dataset.motionTarget;
+          const profile = capturedProfile(componentId, targetId, 'landing');
+          const speed = motionRegistry[componentId].targets[targetId].effects.landing.speed;
+          const target = card.getBoundingClientRect();
+          runProgress(profile, speed, function (progress) {
+            const x = fromX + (target.left - fromX) * progress;
+            const y = fromY + (target.top - fromY) * progress;
+            const scale = 1 + Math.sin(Math.min(1, progress) * Math.PI) * 0.018;
+            ghost.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0) scale(' + scale + ')';
+            ghost.style.opacity = String(clamp(1 - Math.max(0, progress - .82) * 5.5, 0, 1));
+          }, onComplete);
+        }
+        const statusNode = document.querySelector('[data-live-status]');
+        function setStatus(message) { statusNode.textContent = message; }
+        function restoreOrder(list, order) {
+          const before = captureRects(list);
+          order.forEach(function (targetId) {
+            const card = list.querySelector('[data-motion-target="' + targetId + '"]');
+            if (card) list.appendChild(card);
+          });
+          animateReflow(list, before);
+        }
+        let pointerState = null;
+        function moveGhost(state, clientX, clientY) {
+          state.x = clientX - state.offsetX;
+          state.y = clientY - state.offsetY;
+          state.ghost.style.transform = 'translate3d(' + state.x + 'px,' + state.y + 'px,0)';
+        }
+        function pointerDown(event) {
+          if (event.button !== 0 || pointerState) return;
+          const card = event.currentTarget;
+          const list = card.parentElement;
+          selectTarget(card.closest('[data-component]').dataset.component, card.dataset.motionTarget, active.effectId);
+          event.preventDefault();
+          card.setPointerCapture(event.pointerId);
+          const rect = card.getBoundingClientRect();
+          const ghost = card.cloneNode(true);
+          ghost.classList.add('drag-ghost');
+          ghost.classList.remove('is-keyboard-grab');
+          ghost.removeAttribute('data-selected');
+          ghost.removeAttribute('data-motion-target');
+          ghost.setAttribute('aria-hidden', 'true');
+          ghost.style.width = rect.width + 'px';
+          ghost.style.height = rect.height + 'px';
+          document.body.appendChild(ghost);
+          card.classList.add('is-pointer-drag');
+          card.setAttribute('aria-grabbed', 'true');
+          pointerState = {
+            card: card,
+            list: list,
+            ghost: ghost,
+            pointerId: event.pointerId,
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top,
+            x: rect.left,
+            y: rect.top,
+            originalOrder: Array.from(list.children).map(function (item) { return item.dataset.motionTarget; }),
+            valid: true
+          };
+          moveGhost(pointerState, event.clientX, event.clientY);
+          setStatus('正在移动 ' + motionRegistry[active.componentId].targets[active.targetId].label + '；指针保持 1:1 跟手。');
+        }
+        function pointerMove(event) {
+          if (!pointerState || pointerState.pointerId !== event.pointerId) return;
+          moveGhost(pointerState, event.clientX, event.clientY);
+          const listRect = pointerState.list.getBoundingClientRect();
+          const valid = event.clientX >= listRect.left && event.clientX <= listRect.right && event.clientY >= listRect.top && event.clientY <= listRect.bottom;
+          pointerState.valid = valid;
+          pointerState.ghost.toggleAttribute('data-invalid', !valid);
+          if (!valid) return;
+          const siblings = Array.from(pointerState.list.children).filter(function (item) { return item !== pointerState.card; });
+          const next = siblings.find(function (item) { return event.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2; });
+          const beforeOrder = Array.from(pointerState.list.children).map(function (item) { return item.dataset.motionTarget; }).join('|');
+          const beforeRects = captureRects(pointerState.list);
+          if (next) pointerState.list.insertBefore(pointerState.card, next);
+          else pointerState.list.appendChild(pointerState.card);
+          const afterOrder = Array.from(pointerState.list.children).map(function (item) { return item.dataset.motionTarget; }).join('|');
+          if (beforeOrder !== afterOrder) animateReflow(pointerState.list, beforeRects);
+        }
+        function finishPointer(event, cancelled) {
+          if (!pointerState || pointerState.pointerId !== event.pointerId) return;
+          const state = pointerState;
+          pointerState = null;
+          try { state.card.releasePointerCapture(event.pointerId); } catch (error) {}
+          const accepted = state.valid && !cancelled;
+          if (!accepted) restoreOrder(state.list, state.originalOrder);
+          const resultMessage = (accepted ? '已重新排序 ' : '已取消并恢复 ') + motionRegistry[state.card.closest('[data-component]').dataset.component].targets[state.card.dataset.motionTarget].label + '。';
+          animateLanding(state.card, state.ghost, state.x, state.y, function () {
+            state.ghost.remove();
+            state.card.classList.remove('is-pointer-drag');
+            state.card.removeAttribute('aria-grabbed');
+            state.card.focus();
+            setStatus(resultMessage);
+          });
+        }
+        let keyboardState = null;
+        function keyboardReorder(event) {
+          const card = event.currentTarget;
+          if (event.key === ' ' || event.key === 'Enter') {
+            event.preventDefault();
+            if (!keyboardState) {
+              const list = card.parentElement;
+              keyboardState = { card: card, list: list, originalOrder: Array.from(list.children).map(function (item) { return item.dataset.motionTarget; }) };
+              card.classList.add('is-keyboard-grab');
+              card.setAttribute('aria-grabbed', 'true');
+              selectTarget(card.closest('[data-component]').dataset.component, card.dataset.motionTarget, active.effectId);
+              setStatus('已抓取 ' + motionRegistry[active.componentId].targets[active.targetId].label + '；使用方向键排序。');
+            } else if (keyboardState.card === card) {
+              card.classList.remove('is-keyboard-grab');
+              card.removeAttribute('aria-grabbed');
+              keyboardState = null;
+              setStatus('键盘排序已确认。');
+            }
+            return;
+          }
+          if (!keyboardState || keyboardState.card !== card) return;
+          if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            const before = captureRects(keyboardState.list);
+            if (event.key === 'ArrowUp' && card.previousElementSibling) keyboardState.list.insertBefore(card, card.previousElementSibling);
+            if (event.key === 'ArrowDown' && card.nextElementSibling) keyboardState.list.insertBefore(card.nextElementSibling, card);
+            animateReflow(keyboardState.list, before);
+            card.focus();
+            setStatus('已移动到第 ' + (Array.from(keyboardState.list.children).indexOf(card) + 1) + ' 位。');
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            restoreOrder(keyboardState.list, keyboardState.originalOrder);
+            card.classList.remove('is-keyboard-grab');
+            card.removeAttribute('aria-grabbed');
+            keyboardState = null;
+            card.focus();
+            setStatus('键盘排序已取消，顺序已恢复。');
+          }
+        }
+        const componentSelect = document.querySelector('[data-component-select]');
+        const targetSelect = document.querySelector('[data-target-select]');
+        const effectSelect = document.querySelector('[data-effect-select]');
+        function fillSelect(select, entries, selected) {
+          select.innerHTML = '';
+          entries.forEach(function ([value, item]) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = item.label;
+            option.selected = value === selected;
+            select.appendChild(option);
+          });
+        }
+        function renderSelectors() {
+          fillSelect(componentSelect, Object.entries(motionRegistry), active.componentId);
+          fillSelect(targetSelect, Object.entries(motionRegistry[active.componentId].targets), active.targetId);
+          fillSelect(effectSelect, Object.entries(motionRegistry[active.componentId].targets[active.targetId].effects), active.effectId);
+          document.querySelectorAll('[data-component]').forEach(function (track) { track.toggleAttribute('data-active-component', track.dataset.component === active.componentId); });
+          document.querySelectorAll('[data-component] [data-motion-target]').forEach(function (card) {
+            card.toggleAttribute('data-selected', card.dataset.motionTarget === active.targetId && card.closest('[data-component]').dataset.component === active.componentId);
+          });
+        }
+        function selectTarget(componentId, targetId, preferredEffect) {
+          if (!motionRegistry[componentId] || !motionRegistry[componentId].targets[targetId]) return;
+          const effects = motionRegistry[componentId].targets[targetId].effects;
+          active = { componentId: componentId, targetId: targetId, effectId: effects[preferredEffect] ? preferredEffect : Object.keys(effects)[0] };
+          renderSelectors();
+          renderProfile();
+          setStatus('已选择 ' + motionRegistry[componentId].targets[targetId].label + ' · ' + effects[active.effectId].label + '。');
+        }
+        componentSelect.addEventListener('change', function () {
+          const componentId = componentSelect.value;
+          selectTarget(componentId, Object.keys(motionRegistry[componentId].targets)[0], active.effectId);
+        });
+        targetSelect.addEventListener('change', function () { selectTarget(active.componentId, targetSelect.value, active.effectId); });
+        effectSelect.addEventListener('change', function () { active.effectId = effectSelect.value; renderSelectors(); renderProfile(); });
+        document.querySelectorAll('[data-component] [data-motion-target]').forEach(function (card) {
+          card.addEventListener('pointerdown', pointerDown);
+          card.addEventListener('keydown', keyboardReorder);
+          card.addEventListener('focus', function () { selectTarget(card.closest('[data-component]').dataset.component, card.dataset.motionTarget, active.effectId); });
+          card.addEventListener('click', function () { selectTarget(card.closest('[data-component]').dataset.component, card.dataset.motionTarget, active.effectId); });
+        });
+        window.addEventListener('pointermove', pointerMove);
+        window.addEventListener('pointerup', function (event) { finishPointer(event, false); });
+        window.addEventListener('pointercancel', function (event) { finishPointer(event, true); });
+        const springLimits = {
+          response: { min: 180, max: 900 },
+          dampingFraction: { min: 0.4, max: 1.2 },
+          initialVelocity: { min: -8, max: 8 }
+        };
+        const cubicLimits = {
+          duration: { min: 80, max: 2000 },
+          x1: { min: 0, max: 1 },
+          y1: { min: -1, max: 2 },
+          x2: { min: 0, max: 1 },
+          y2: { min: -1, max: 2 }
+        };
+        const springNumbers = Array.from(document.querySelectorAll('[data-spring-number]'));
+        const springRanges = Array.from(document.querySelectorAll('[data-spring-range]'));
+        const cubicNumbers = Array.from(document.querySelectorAll('[data-cubic-number]'));
+        const cubicRanges = Array.from(document.querySelectorAll('[data-cubic-range]'));
+        const cubicEditor = document.querySelector('[data-cubic-editor]');
+        const cubicEditorSvg = document.querySelector('[data-cubic-editor-svg]');
+        const cubicHandles = Array.from(document.querySelectorAll('[data-cubic-handle]'));
+        const cubicEditorBounds = { left: 10, right: 250, top: 10, bottom: 114, minY: -1, maxY: 2 };
+        let cubicHandleDrag = null;
+        function springDisplay(key, value) {
+          if (key === 'response') return Math.round(value * 1000);
+          return Number(value.toFixed(2));
+        }
+        function springStore(key, value) { return key === 'response' ? value / 1000 : value; }
+        function writeSpring(key, raw) {
+          if (typeof raw === 'string' && raw.trim() === '') return false;
+          const number = Number(raw);
+          if (!Number.isFinite(number)) return false;
+          const limit = springLimits[key];
+          currentProfile().spring[key] = springStore(key, clamp(number, limit.min, limit.max));
+          saveProfiles();
+          renderProfile();
+          return true;
+        }
+        function writeCubic(key, raw) {
+          if (typeof raw === 'string' && raw.trim() === '') return false;
+          const number = Number(raw);
+          if (!Number.isFinite(number)) return false;
+          const limit = cubicLimits[key];
+          currentProfile().cubic[key] = key === 'duration' ? Math.round(clamp(number, limit.min, limit.max)) : clamp(number, limit.min, limit.max);
+          saveProfiles();
+          renderProfile();
+          return true;
+        }
+        function writeCubicPoint(handle, x, y, profile) {
+          if (!Number.isFinite(x) || !Number.isFinite(y) || (handle !== 1 && handle !== 2)) return false;
+          const targetProfile = profile || currentProfile();
+          const xKey = handle === 1 ? 'x1' : 'x2';
+          const yKey = handle === 1 ? 'y1' : 'y2';
+          targetProfile.cubic[xKey] = Number(clamp(x, cubicLimits[xKey].min, cubicLimits[xKey].max).toFixed(2));
+          targetProfile.cubic[yKey] = Number(clamp(y, cubicLimits[yKey].min, cubicLimits[yKey].max).toFixed(2));
+          saveProfiles();
+          renderProfile();
+          return true;
+        }
+        function cubicEditorPoint(x, y) {
+          const width = cubicEditorBounds.right - cubicEditorBounds.left;
+          const height = cubicEditorBounds.bottom - cubicEditorBounds.top;
+          return {
+            x: cubicEditorBounds.left + clamp(x, 0, 1) * width,
+            y: cubicEditorBounds.top + (cubicEditorBounds.maxY - clamp(y, cubicEditorBounds.minY, cubicEditorBounds.maxY)) / (cubicEditorBounds.maxY - cubicEditorBounds.minY) * height
+          };
+        }
+        function cubicPointFromPointer(event) {
+          const screenPoint = cubicEditorSvg.createSVGPoint();
+          screenPoint.x = event.clientX;
+          screenPoint.y = event.clientY;
+          const matrix = cubicEditorSvg.getScreenCTM();
+          const local = matrix ? screenPoint.matrixTransform(matrix.inverse()) : screenPoint;
+          return {
+            x: clamp((local.x - cubicEditorBounds.left) / (cubicEditorBounds.right - cubicEditorBounds.left), 0, 1),
+            y: clamp(cubicEditorBounds.maxY - (local.y - cubicEditorBounds.top) / (cubicEditorBounds.bottom - cubicEditorBounds.top) * (cubicEditorBounds.maxY - cubicEditorBounds.minY), cubicEditorBounds.minY, cubicEditorBounds.maxY)
+          };
+        }
+        function beginCubicHandleDrag(event) {
+          if (event.button !== 0 || currentProfile().mode !== 'cubic') return;
+          const handle = Number(event.currentTarget.dataset.cubicHandle);
+          event.preventDefault();
+          event.stopPropagation();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          event.currentTarget.toggleAttribute('data-dragging', true);
+          cubicHandleDrag = { handle: handle, pointerId: event.pointerId, element: event.currentTarget, profile: currentProfile() };
+        }
+        function moveCubicHandle(event) {
+          if (!cubicHandleDrag || cubicHandleDrag.pointerId !== event.pointerId) return;
+          event.preventDefault();
+          const point = cubicPointFromPointer(event);
+          writeCubicPoint(cubicHandleDrag.handle, point.x, point.y, cubicHandleDrag.profile);
+        }
+        function endCubicHandleDrag(event) {
+          if (!cubicHandleDrag || cubicHandleDrag.pointerId !== event.pointerId) return;
+          moveCubicHandle(event);
+          cancelCubicHandleDrag(event);
+        }
+        function cancelCubicHandleDrag(event) {
+          if (!cubicHandleDrag || cubicHandleDrag.pointerId !== event.pointerId) return;
+          try { cubicHandleDrag.element.releasePointerCapture(event.pointerId); } catch (error) {}
+          cubicHandleDrag.element.removeAttribute('data-dragging');
+          cubicHandleDrag = null;
+        }
+        function nudgeCubicHandle(event) {
+          let deltaX = 0;
+          let deltaY = 0;
+          if (event.key === 'ArrowLeft') deltaX = -1;
+          else if (event.key === 'ArrowRight') deltaX = 1;
+          else if (event.key === 'ArrowUp') deltaY = 1;
+          else if (event.key === 'ArrowDown') deltaY = -1;
+          else return;
+          const step = event.shiftKey ? 0.1 : 0.01;
+          const handle = Number(event.currentTarget.dataset.cubicHandle);
+          const cubic = currentProfile().cubic;
+          const x = handle === 1 ? cubic.x1 : cubic.x2;
+          const y = handle === 1 ? cubic.y1 : cubic.y2;
+          event.preventDefault();
+          writeCubicPoint(handle, x + deltaX * step, y + deltaY * step);
+        }
+        springRanges.forEach(function (input) { input.addEventListener('input', function () { writeSpring(input.dataset.springRange, input.value); }); });
+        springNumbers.forEach(function (input) {
+          input.addEventListener('change', function () { if (!writeSpring(input.dataset.springNumber, input.value)) renderProfile(); });
+          input.addEventListener('blur', renderProfile);
+        });
+        cubicRanges.forEach(function (input) { input.addEventListener('input', function () { writeCubic(input.dataset.cubicRange, input.value); }); });
+        cubicNumbers.forEach(function (input) {
+          input.addEventListener('change', function () { if (!writeCubic(input.dataset.cubicNumber, input.value)) renderProfile(); });
+          input.addEventListener('blur', renderProfile);
+        });
+        cubicHandles.forEach(function (handle) {
+          handle.addEventListener('pointerdown', beginCubicHandleDrag);
+          handle.addEventListener('pointermove', moveCubicHandle);
+          handle.addEventListener('pointerup', endCubicHandleDrag);
+          handle.addEventListener('pointercancel', cancelCubicHandleDrag);
+          handle.addEventListener('keydown', nudgeCubicHandle);
+        });
+        document.querySelectorAll('[data-motion-mode]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            currentProfile().mode = button.dataset.motionMode;
+            saveProfiles();
+            renderProfile();
+            replayPreview();
+          });
+        });
+        document.querySelectorAll('[data-spring-preset]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            currentProfile().spring = normalizeSpring(springPresets[button.dataset.springPreset]);
+            saveProfiles();
+            renderProfile();
+            replayPreview();
+          });
+        });
+        document.querySelectorAll('[data-cubic-preset]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            currentProfile().cubic = normalizeCubic(Object.assign({}, currentProfile().cubic, cubicPresets[button.dataset.cubicPreset]));
+            saveProfiles();
+            renderProfile();
+            replayPreview();
+          });
+        });
+        function curveSamples(profile, speed) {
+          const samples = [];
+          if (profile.mode === 'cubic') {
+            for (let index = 0; index <= 80; index += 1) samples.push(cubicProgress(index / 80, profile.cubic));
+            return { values: samples, duration: profile.cubic.duration };
+          }
+          const duration = clamp(profile.spring.response * 3.2 / speed, .5, 2.4);
+          const spring = resolveSpring(profile, speed);
+          let value = 0;
+          let velocity = spring.initialVelocity;
+          const dt = duration / 80;
+          for (let index = 0; index <= 80; index += 1) {
+            samples.push(value);
+            const force = -spring.stiffness * (value - 1);
+            const dampingForce = -spring.damping * velocity;
+            velocity += (force + dampingForce) * dt;
+            value += velocity * dt;
+          }
+          return { values: samples, duration: Math.round(duration * 1000) };
+        }
+        function renderCubicEditor(profile) {
+          cubicEditor.hidden = profile.mode !== 'cubic';
+          const start = cubicEditorPoint(0, 0);
+          const end = cubicEditorPoint(1, 1);
+          const points = [
+            cubicEditorPoint(profile.cubic.x1, profile.cubic.y1),
+            cubicEditorPoint(profile.cubic.x2, profile.cubic.y2)
+          ];
+          document.querySelector('[data-cubic-control-path]').setAttribute('d', 'M ' + start.x.toFixed(2) + ' ' + start.y.toFixed(2) + ' C ' + points[0].x.toFixed(2) + ' ' + points[0].y.toFixed(2) + ', ' + points[1].x.toFixed(2) + ' ' + points[1].y.toFixed(2) + ', ' + end.x.toFixed(2) + ' ' + end.y.toFixed(2));
+          points.forEach(function (point, index) {
+            const handleNumber = index + 1;
+            const handle = document.querySelector('[data-cubic-handle="' + handleNumber + '"]');
+            const guide = document.querySelector('[data-cubic-guide="' + handleNumber + '"]');
+            const anchor = handleNumber === 1 ? start : end;
+            const xValue = profile.cubic[handleNumber === 1 ? 'x1' : 'x2'];
+            const yValue = profile.cubic[handleNumber === 1 ? 'y1' : 'y2'];
+            guide.setAttribute('x1', anchor.x.toFixed(2));
+            guide.setAttribute('y1', anchor.y.toFixed(2));
+            guide.setAttribute('x2', point.x.toFixed(2));
+            guide.setAttribute('y2', point.y.toFixed(2));
+            handle.setAttribute('cx', point.x.toFixed(2));
+            handle.setAttribute('cy', point.y.toFixed(2));
+            handle.dataset.x = xValue.toFixed(2);
+            handle.dataset.y = yValue.toFixed(2);
+            handle.setAttribute('aria-valuenow', xValue.toFixed(2));
+            handle.setAttribute('aria-valuetext', 'X ' + xValue.toFixed(2) + '，Y ' + yValue.toFixed(2));
+          });
+        }
+        function renderCurve() {
+          const profile = currentProfile();
+          const sampled = curveSamples(profile, currentEffect().speed);
+          const min = Math.min(0, ...sampled.values);
+          const max = Math.max(1, ...sampled.values);
+          const range = Math.max(.001, max - min);
+          const y = function (value) { return 78 - ((value - min) / range) * 64; };
+          document.querySelector('[data-motion-curve]').setAttribute('points', sampled.values.map(function (value, index) {
+            return (260 * index / (sampled.values.length - 1)).toFixed(2) + ',' + y(value).toFixed(2);
+          }).join(' '));
+          const targetLine = document.querySelector('[data-curve-target]');
+          targetLine.setAttribute('y1', y(1));
+          targetLine.setAttribute('y2', y(1));
+          document.querySelector('[data-curve-title]').textContent = (profile.mode === 'spring' ? 'Spring' : 'Cubic') + ' · ' + motionRegistry[active.componentId].targets[active.targetId].effects[active.effectId].label;
+          document.querySelector('[data-curve-caption]').textContent = '0–' + sampled.duration + ' ms';
+        }
+        const previewDot = document.querySelector('[data-preview-dot]');
+        function replayPreview() {
+          if (previewCancel) previewCancel();
+          const track = previewDot.parentElement;
+          const distance = Math.max(0, track.clientWidth - previewDot.offsetWidth - 22);
+          previewDot.style.transform = 'translate3d(0,0,0)';
+          previewCancel = runProgress(currentProfile(), currentEffect().speed, function (progress) {
+            previewDot.style.transform = 'translate3d(' + (distance * progress) + 'px,0,0)';
+          }, function () { previewCancel = null; });
+        }
+        document.querySelector('[data-replay]').addEventListener('click', replayPreview);
+        document.querySelectorAll('[data-playback-rate]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            playbackRate = Number(button.dataset.playbackRate);
+            document.querySelectorAll('[data-playback-rate]').forEach(function (candidate) {
+              const selected = Number(candidate.dataset.playbackRate) === playbackRate;
+              candidate.toggleAttribute('data-active', selected);
+              candidate.setAttribute('aria-pressed', String(selected));
+            });
+            setStatus('预览速度已切换为 ' + playbackRate + '×；参数和导出保持不变。');
+          });
+        });
+        function format(value, digits) { return Number(value.toFixed(digits == null ? 4 : digits)); }
+        function buildExport() {
+          const profile = currentProfile();
+          const stack = document.querySelector('[data-export-stack]').value;
+          const scope = profileKey(active);
+          const speed = currentEffect().speed;
+          let code = '';
+          let extension = 'js';
+          if (profile.mode === 'spring') {
+            const physics = resolveSpring(profile, speed);
+            if (stack === 'web') {
+              code = ['// ' + scope + ' · Spring', '// Preview slowdown is intentionally excluded.', 'export const spring = ' + JSON.stringify({ mass: 1, stiffness: format(physics.stiffness), damping: format(physics.damping), initialVelocity: format(physics.initialVelocity) }, null, 2) + ';', '', '// Animate normalized progress 0 -> 1; cancel before retargeting.', '// Respect prefers-reduced-motion and begin from the live visual value.'].join('\\n');
+            } else if (stack === 'react') {
+              code = ['// ' + scope + ' · Motion for React', 'const transition = {', '  type: "spring",', '  mass: 1,', '  stiffness: ' + format(physics.stiffness) + ',', '  damping: ' + format(physics.damping) + ',', '  velocity: ' + format(physics.initialVelocity), '};', '// Apply to the selected property and honor reduced motion.'].join('\\n');
+            } else if (stack === 'swiftui') {
+              extension = 'swift';
+              code = ['// ' + scope + ' · SwiftUI', 'let motion = Animation.interpolatingSpring(', '  mass: 1,', '  stiffness: ' + format(physics.stiffness) + ',', '  damping: ' + format(physics.damping) + ',', '  initialVelocity: ' + format(physics.initialVelocity), ')', '// Gate with accessibilityReduceMotion in the destination view.'].join('\\n');
+            } else {
+              extension = 'kt';
+              code = ['// ' + scope + ' · Jetpack Compose', 'val spec = spring<Float>(', '  dampingRatio = ' + format(profile.spring.dampingFraction) + 'f,', '  stiffness = ' + format(physics.stiffness) + 'f', ')', '// Pass normalized initialVelocity to Animatable.animateTo.', '// Honor the destination reduced-motion policy.'].join('\\n');
+            }
+          } else {
+            const cubic = profile.cubic;
+            const points = [cubic.x1, cubic.y1, cubic.x2, cubic.y2].map(function (value) { return format(value, 3); });
+            if (stack === 'web') {
+              code = ['// ' + scope + ' · Cubic Bézier', 'export const timing = { duration: ' + cubic.duration + ', easing: "cubic-bezier(' + points.join(', ') + ')" };', '// Nominal duration; preview slowdown is excluded.'].join('\\n');
+            } else if (stack === 'react') {
+              code = ['// ' + scope + ' · Motion for React', 'const transition = { type: "tween", duration: ' + format(cubic.duration / 1000, 3) + ', ease: [' + points.join(', ') + '] };', '// Begin from the live visual value when retargeting.'].join('\\n');
+            } else if (stack === 'swiftui') {
+              extension = 'swift';
+              code = ['// ' + scope + ' · SwiftUI', 'let motion = Animation.timingCurve(' + points.join(', ') + ', duration: ' + format(cubic.duration / 1000, 3) + ')'].join('\\n');
+            } else {
+              extension = 'kt';
+              code = ['// ' + scope + ' · Jetpack Compose', 'val spec = tween<Float>(', '  durationMillis = ' + cubic.duration + ',', '  easing = CubicBezierEasing(' + points.map(function (value) { return value + 'f'; }).join(', ') + ')', ')'].join('\\n');
+            }
+          }
+          return { code: code, filename: active.targetId + '-' + active.effectId + '-' + profile.mode + '-' + stack + '.' + extension };
+        }
+        function renderExport() {
+          const exported = buildExport();
+          document.querySelector('[data-export-code]').value = exported.code;
+          document.querySelector('[data-export-filename]').textContent = exported.filename;
+        }
+        document.querySelector('[data-export-stack]').addEventListener('change', renderExport);
+        document.querySelector('[data-copy-export]').addEventListener('click', async function () {
+          const exported = buildExport();
+          try {
+            await navigator.clipboard.writeText(exported.code);
+            document.querySelector('[data-export-status]').textContent = '已复制当前元素与动效层代码。';
+          } catch (error) {
+            const area = document.querySelector('[data-export-code]');
+            area.focus();
+            area.select();
+            document.execCommand('copy');
+            document.querySelector('[data-export-status]').textContent = '已使用兼容方式复制。';
+          }
+        });
+        document.querySelector('[data-download-export]').addEventListener('click', function () {
+          const exported = buildExport();
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(new Blob([exported.code], { type: 'text/plain;charset=utf-8' }));
+          link.download = exported.filename;
+          link.click();
+          setTimeout(function () { URL.revokeObjectURL(link.href); }, 0);
+          document.querySelector('[data-export-status]').textContent = '已下载 ' + exported.filename + '。';
+        });
+        function renderProfile() {
+          const profile = currentProfile();
+          document.querySelectorAll('[data-motion-mode]').forEach(function (button) {
+            const selected = button.dataset.motionMode === profile.mode;
+            button.toggleAttribute('data-active', selected);
+            button.setAttribute('aria-pressed', String(selected));
+          });
+          document.querySelector('[data-controls="spring"]').hidden = profile.mode !== 'spring';
+          document.querySelector('[data-controls="cubic"]').hidden = profile.mode !== 'cubic';
+          springNumbers.concat(springRanges).forEach(function (input) {
+            const key = input.dataset.springNumber || input.dataset.springRange;
+            input.value = springDisplay(key, profile.spring[key]);
+          });
+          cubicNumbers.concat(cubicRanges).forEach(function (input) {
+            const key = input.dataset.cubicNumber || input.dataset.cubicRange;
+            input.value = profile.cubic[key];
+          });
+          const component = motionRegistry[active.componentId];
+          const target = component.targets[active.targetId];
+          const effect = target.effects[active.effectId];
+          document.querySelector('[data-lab-subtitle]').textContent = component.label + ' · ' + target.label + ' · ' + effect.label;
+          document.querySelector('[data-lab-note]').textContent = profile.mode === 'spring' ? '响应时间描述弹簧频率，不等于总完成时长。当前层速度系数 ' + effect.speed + '×。' : 'Cubic 时长为标称时间；慢放倍率不会写入代码。';
+          renderCubicEditor(profile);
+          renderCurve();
+          renderExport();
+        }
+        const lab = document.querySelector('.motion-lab');
+        const labHandle = document.querySelector('[data-lab-handle]');
+        const labToggle = document.querySelector('[data-lab-toggle]');
+        let labDrag = null;
+        function loadLayout() {
+          try { return JSON.parse(localStorage.getItem(layoutStorageKey) || '{}'); }
+          catch (error) { return {}; }
+        }
+        function saveLayout() {
+          const rect = lab.getBoundingClientRect();
+          const layout = { open: lab.hasAttribute('data-open') };
+          if (lab.hasAttribute('data-positioned')) {
+            layout.x = Math.round(rect.left);
+            layout.y = Math.round(rect.top);
+          }
+          try { localStorage.setItem(layoutStorageKey, JSON.stringify(layout)); } catch (error) {}
+        }
+        function setLabPosition(x, y, persist) {
+          const nextX = clamp(x, 8, Math.max(8, window.innerWidth - lab.offsetWidth - 8));
+          const nextY = clamp(y, 8, Math.max(8, window.innerHeight - lab.offsetHeight - 8));
+          lab.style.left = nextX + 'px';
+          lab.style.top = nextY + 'px';
+          lab.style.bottom = 'auto';
+          lab.toggleAttribute('data-positioned', true);
+          if (persist) saveLayout();
+        }
+        labHandle.addEventListener('pointerdown', function (event) {
+          if (event.button !== 0) return;
+          const rect = lab.getBoundingClientRect();
+          event.preventDefault();
+          labHandle.setPointerCapture(event.pointerId);
+          labDrag = { pointerId: event.pointerId, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
+          lab.toggleAttribute('data-dragging', true);
+        });
+        labHandle.addEventListener('pointermove', function (event) {
+          if (!labDrag || labDrag.pointerId !== event.pointerId) return;
+          setLabPosition(event.clientX - labDrag.offsetX, event.clientY - labDrag.offsetY, false);
+        });
+        function endLabDrag(event) {
+          if (!labDrag || labDrag.pointerId !== event.pointerId) return;
+          try { labHandle.releasePointerCapture(event.pointerId); } catch (error) {}
+          labDrag = null;
+          lab.removeAttribute('data-dragging');
+          saveLayout();
+        }
+        labHandle.addEventListener('pointerup', endLabDrag);
+        labHandle.addEventListener('pointercancel', endLabDrag);
+        labHandle.addEventListener('keydown', function (event) {
+          const directions = { ArrowLeft: [-8, 0], ArrowRight: [8, 0], ArrowUp: [0, -8], ArrowDown: [0, 8] };
+          if (!directions[event.key]) return;
+          event.preventDefault();
+          const rect = lab.getBoundingClientRect();
+          setLabPosition(rect.left + directions[event.key][0], rect.top + directions[event.key][1], true);
+        });
+        labToggle.addEventListener('click', function () {
+          const open = !lab.hasAttribute('data-open');
+          lab.toggleAttribute('data-open', open);
+          labToggle.setAttribute('aria-expanded', String(open));
+          labToggle.textContent = open ? '收起' : '展开';
+          requestAnimationFrame(function () {
+            if (lab.hasAttribute('data-positioned')) {
+              const rect = lab.getBoundingClientRect();
+              setLabPosition(rect.left, rect.top, true);
+            } else saveLayout();
+          });
+        });
+        window.addEventListener('resize', function () {
+          if (!lab.hasAttribute('data-positioned')) return;
+          const rect = lab.getBoundingClientRect();
+          setLabPosition(rect.left, rect.top, true);
+        });
+        const storedLayout = loadLayout();
+        if (storedLayout.open === false) {
+          lab.removeAttribute('data-open');
+          labToggle.setAttribute('aria-expanded', 'false');
+          labToggle.textContent = '展开';
+        }
+        if (Number.isFinite(storedLayout.x) && Number.isFinite(storedLayout.y)) requestAnimationFrame(function () { setLabPosition(storedLayout.x, storedLayout.y, false); });
+        window.priorityOrbitLab = {
+          profileKey: profileKey,
+          cubicProgress: cubicProgress,
+          snapshot: function () {
+            return {
+              active: Object.assign({}, active),
+              playbackRate: playbackRate,
+              profile: normalizeProfile(currentProfile()),
+              orders: Object.fromEntries(Array.from(document.querySelectorAll('[data-task-list]')).map(function (list) {
+                return [list.dataset.taskList, Array.from(list.children).map(function (card) { return card.dataset.motionTarget; })];
+              }))
+            };
+          },
+          select: selectTarget,
+          setMode: function (mode) {
+            currentProfile().mode = mode === 'cubic' ? 'cubic' : 'spring';
+            saveProfiles();
+            renderProfile();
+          },
+          setSpringResponseMs: function (milliseconds) { return writeSpring('response', milliseconds); },
+          setPlaybackRate: function (rate) {
+            const button = document.querySelector('[data-playback-rate="' + rate + '"]');
+            if (button) button.click();
+            return playbackRate;
+          },
+          replay: replayPreview,
+          getProfile: function (componentId, targetId, effectId) { return capturedProfile(componentId, targetId, effectId); }
+        };
+        renderSelectors();
+        renderProfile();
+      }());
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1713 @@
+<!--
+[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+INPUT: Pointer and keyboard drag events, per-element/effect Spring or Cubic settings, panel position, export stack, and preview playback rate.
+OUTPUT: Three drag-and-drop variants with isolated Spring/Cubic motion, accurate curves, four-speed playback, movable/collapsible controls, and four-stack code export.
+POS: Exploration-only static prototype; no production integration or dependencies.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Drag spring interaction variants</title>
+    <style>
+      :root {
+        color: #18212f;
+        background: #f5f6fa;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 320px; min-height: 100vh; }
+      button { font: inherit; }
+      .stage { min-height: 100vh; }
+      .variant { min-height: 100vh; overflow: hidden; padding: 36px clamp(20px, 5vw, 72px) 112px; }
+      .variant-shell { width: min(1180px, 100%); margin: 0 auto; }
+      .eyebrow { margin: 0 0 12px; color: #7a8290; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+      .variant-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+      h1 { margin: 0; color: #172033; font-size: clamp(30px, 4vw, 52px); letter-spacing: -.055em; line-height: .98; }
+      .variant-summary { max-width: 340px; margin: 0; color: #6d7584; font-size: 15px; line-height: 1.5; }
+      .drag-hint { display: inline-flex; gap: 9px; align-items: center; color: #697282; font-size: 13px; line-height: 1.4; }
+      .drag-hint kbd { display: inline-grid; min-width: 21px; height: 21px; padding: 0 5px; place-items: center; border: 1px solid #d5d9e2; border-bottom-width: 2px; border-radius: 5px; background: #fff; color: #4f596a; font-family: inherit; font-size: 11px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+      .live-status { position: fixed; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .focus-ring:focus-visible, [data-drag-item]:focus-visible { outline: 3px solid rgba(55, 105, 255, .44); outline-offset: 3px; }
+      .drag-ghost { position: fixed; z-index: 1000; pointer-events: none; transform-origin: center; box-shadow: 0 22px 45px rgba(28, 42, 75, .24), 0 5px 12px rgba(28, 42, 75, .12); will-change: transform, opacity; }
+      .is-key-grabbed { outline: 3px solid #3975ff !important; outline-offset: 3px; }
+      .is-key-target { box-shadow: 0 0 0 3px rgba(57, 117, 255, .28), 0 14px 30px rgba(57, 117, 255, .1) !important; }
+      .spring-lab { position: fixed; z-index: 1200; top: 24px; right: 24px; width: 294px; overflow: hidden; border: 1px solid rgba(210, 226, 255, .18); border-radius: 18px; color: #e8f0ff; background: rgba(13, 22, 39, .9); box-shadow: 0 18px 42px rgba(12, 24, 46, .2), inset 0 1px rgba(255,255,255,.08); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); font-size: 12px; }
+      .spring-lab[data-dragging] { user-select: none; }
+      .spring-lab { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }
+      .spring-lab-header { flex-shrink: 0; }
+      .spring-lab-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 13px; }
+      .spring-lab-title { display: grid; flex: 1; gap: 2px; min-width: 0; cursor: grab; touch-action: none; }
+      .spring-lab[data-dragging] .spring-lab-title { cursor: grabbing; }
+      .spring-lab-title:focus-visible { outline: 2px solid rgba(151, 188, 255, .9); outline-offset: 3px; border-radius: 5px; }
+      .spring-lab-title strong { font-size: 13px; letter-spacing: -.01em; }
+      .spring-lab-title span { color: #9fadc7; font-size: 10px; }
+      .spring-lab-toggle { min-height: 26px; padding: 0 9px; border: 1px solid rgba(216,229,255,.16); border-radius: 999px; color: #dbe8ff; background: rgba(255,255,255,.07); cursor: pointer; }
+      .spring-lab-toggle:hover, .spring-preset:hover, .spring-preview-button:hover { background: rgba(143,176,255,.2); }
+      .spring-lab-body { display: grid; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 13px 13px; border-top: 1px solid rgba(216,229,255,.1); }
+      .spring-lab:not([data-open]) .spring-lab-body { display: none; }
+      .spring-target-control, .spring-effect-control { display: grid; gap: 5px; padding-top: 12px; }
+      .spring-target-control label, .spring-effect-control label { color: #d5e0f5; font-size: 11px; font-weight: 650; }
+      .spring-target-select, .spring-effect-select { width: 100%; min-height: 29px; padding: 0 8px; border: 1px solid rgba(216,229,255,.18); border-radius: 8px; color: #e8f0ff; background: rgba(255,255,255,.07); font: inherit; }
+      .spring-target-select option, .spring-effect-select option { color: #172033; }
+      .spring-target-hint, .spring-effect-hint { margin: 0; color: #8295b8; font-size: 10px; line-height: 1.35; }
+      .spring-controls { display: grid; gap: 9px; padding-top: 12px; }
+      .spring-control { display: grid; grid-template-columns: 1fr auto; gap: 5px 9px; align-items: center; color: #d5e0f5; }
+      .spring-control label { font-size: 11px; font-weight: 650; }
+      .spring-control label small { color: #96a8c8; font-size: 10px; font-weight: 600; }
+      .spring-number { width: 72px; height: 25px; padding: 0 7px; border: 1px solid rgba(216,229,255,.18); border-radius: 7px; color: #e8f0ff; background: rgba(255,255,255,.06); font: inherit; font-variant-numeric: tabular-nums; text-align: right; }
+      .spring-number:focus-visible { outline: 2px solid rgba(142,184,255,.7); outline-offset: 1px; }
+      .spring-range { grid-column: 1 / -1; width: 100%; accent-color: #8bb6ff; cursor: ew-resize; }
+      .spring-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .spring-playback { display: grid; gap: 6px; padding-top: 12px; }
+      .spring-playback-label { color: #d5e0f5; font-size: 11px; font-weight: 650; }
+      .spring-playback-rates { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+      .spring-lab [hidden] { display: none !important; }
+      .motion-modes, .cubic-points { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .cubic-controls { display: grid; gap: 10px; }
+      .cubic-points .spring-number { width: 62px; }
+      .motion-modes :focus-visible { outline: 2px solid #8bb6ff; outline-offset: 2px; }
+      .spring-playback-rates :focus-visible { outline: 2px solid #8bb6ff; outline-offset: 2px; }
+      .spring-preset, .spring-preview-button { min-height: 28px; border: 1px solid rgba(216,229,255,.14); border-radius: 8px; color: #dbe8ff; background: rgba(255,255,255,.06); cursor: pointer; font-size: 11px; }
+      .spring-preset[data-active] { border-color: rgba(149,187,255,.62); background: rgba(100,150,255,.25); color: #fff; }
+      .spring-preview { position: relative; height: 28px; margin-top: 1px; border-radius: 999px; background: linear-gradient(90deg, rgba(141,177,255,.15), rgba(141,177,255,.03)); box-shadow: inset 0 0 0 1px rgba(189,209,255,.12); }
+      .spring-preview::before, .spring-preview::after { position: absolute; top: 7px; bottom: 7px; width: 1px; background: rgba(214,226,255,.18); content: ""; }
+      .spring-preview::before { left: 50%; }
+      .spring-preview::after { right: 10px; background: rgba(162,194,255,.55); }
+      .spring-preview-dot { position: absolute; top: 6px; left: 10px; width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #a6c7ff 46%, #6495ef); box-shadow: 0 3px 10px rgba(80,131,240,.62); will-change: transform; }
+      .spring-curve-card { display: grid; gap: 5px; padding: 8px 9px 7px; border: 1px solid rgba(189,209,255,.12); border-radius: 10px; background: rgba(127,155,210,.06); }
+      .spring-curve-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #c9d8f3; font-size: 10px; }
+      .spring-curve-head span:last-child { color: #8295b8; font-variant-numeric: tabular-nums; }
+      .spring-curve { display: block; width: 100%; height: 68px; overflow: visible; }
+      .spring-curve-grid { stroke: rgba(204,220,251,.15); stroke-width: 1; stroke-dasharray: 2 3; }
+      .spring-curve-target { stroke: rgba(139,182,255,.5); stroke-width: 1; stroke-dasharray: 3 3; }
+      .spring-curve-path { fill: none; stroke: #9fc2ff; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 2px 3px rgba(69,125,238,.35)); }
+      .spring-lab-note { min-height: 16px; margin: 0; color: #96a8c8; font-size: 10px; line-height: 1.35; }
+      .spring-preview-button { width: 100%; }
+      .spring-export { min-width: 0; border-top: 1px solid rgba(216,229,255,.14); padding-top: 12px; }
+      .spring-export summary { cursor: pointer; color: #d5e0f5; font-weight: 650; padding: 3px 0; }
+      .spring-export summary span { margin-left: 5px; color: #96a8c8; font-size: 10px; font-weight: 400; }
+      .spring-export-content { display: grid; gap: 9px; padding-top: 12px; min-width: 0; }
+      .spring-export-content label { color: #d5e0f5; font-size: 11px; }
+      .spring-export-code { display: block; resize: vertical; width: 100%; min-height: 140px; height: 220px; max-height: 50dvh; padding: 10px; border: 1px solid rgba(216,229,255,.16); border-radius: 8px; color: #c6ddff; background: rgba(0,0,0,.22); font: 11px/1.6 Consolas, monospace; tab-size: 2; white-space: pre; overflow: auto; }
+      .spring-export-filename { color: #96a8c8; font: 10px/1.5 Consolas, monospace; overflow-wrap: anywhere; }
+      .spring-export-actions { display: flex; gap: 7px; }
+      .spring-export-actions button { flex: 1; }
+      .spring-lab-body, .spring-export-code { scrollbar-width: thin; scrollbar-color: #52617a #142034; }
+      .spring-export-status { margin: 0; min-height: 14px; color: #bad6ff; font-size: 10px; line-height: 1.5; }
+      .spring-export :focus-visible { outline: 2px solid #8bb6ff; outline-offset: 2px; }
+      [data-motion-target][data-spring-selected] { outline: 2px solid rgba(87, 132, 255, .76); outline-offset: 3px; }
+
+      /* Lift List */
+      .lift-variant { background: radial-gradient(circle at 12% 18%, #e5f0ff 0, transparent 31%), #f6f7fa; }
+      .list-canvas { width: min(680px, 100%); margin: 0 auto; padding: 10px; border: 1px solid rgba(24, 33, 47, .08); border-radius: 25px; background: rgba(255, 255, 255, .68); box-shadow: 0 24px 60px rgba(29, 42, 73, .09), inset 0 1px rgba(255,255,255,.8); }
+      .list-topline { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 14px; }
+      .list-topline strong { font-size: 14px; letter-spacing: -.01em; }
+      .list-topline span { color: #87909d; font-size: 12px; }
+      .task-list { display: grid; gap: 8px; }
+      .list-card, .list-placeholder { min-height: 76px; border-radius: 17px; }
+      .list-card { display: grid; grid-template-columns: 26px 1fr auto; gap: 13px; align-items: center; padding: 14px 16px; border: 1px solid transparent; background: #fff; box-shadow: 0 1px 2px rgba(16, 26, 47, .04); cursor: grab; touch-action: none; user-select: none; }
+      .list-card:active { cursor: grabbing; }
+      .list-card.is-pointer-drag { opacity: .16; }
+      .list-card .grip { display: grid; width: 24px; height: 24px; place-items: center; color: #a5acb7; }
+      .list-card .grip::before { content: "⠿"; font-size: 20px; line-height: 1; transform: rotate(90deg); }
+      .task-copy { min-width: 0; }
+      .task-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; letter-spacing: -.015em; }
+      .task-copy span { display: block; margin-top: 4px; color: #85909e; font-size: 12px; }
+      .task-chip { padding: 5px 8px; border-radius: 999px; color: #5f5a29; background: #fff4b4; font-size: 11px; font-weight: 700; }
+      .task-chip.blue { color: #315d9c; background: #e6f0ff; }
+      .task-chip.rose { color: #98645d; background: #ffe9e5; }
+      .list-placeholder { border: 1.5px dashed #90b3ff; background: rgba(92, 142, 255, .08); }
+      .list-card.landing { animation: landing-glow var(--demo-landing-duration, 580ms) ease-out both; }
+      @keyframes landing-glow { 0% { box-shadow: 0 0 0 0 rgba(57,117,255,.34); } 45% { box-shadow: 0 0 0 7px rgba(57,117,255,0); } 100% { box-shadow: 0 1px 2px rgba(16,26,47,.04); } }
+
+      /* Magnetic Board */
+      .board-variant { background: linear-gradient(145deg, #fff8f3 0%, #f7f6ff 46%, #edf4ff 100%); }
+      .board-meta { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin: 0 0 18px; color: #657184; font-size: 13px; }
+      .board-meta .avatar-stack { display: flex; padding-left: 8px; }
+      .board-meta .avatar { display: grid; width: 25px; height: 25px; margin-left: -8px; place-items: center; border: 2px solid #f8f7fb; border-radius: 50%; background: #dce9ff; color: #426397; font-size: 9px; font-weight: 800; }
+      .kanban { display: grid; grid-template-columns: repeat(3, minmax(210px, 1fr)); gap: 16px; min-width: 660px; }
+      .kanban-scroll { overflow-x: auto; padding: 5px 2px 15px; }
+      .kanban-lane { min-height: 392px; padding: 13px; border: 1px solid rgba(37, 44, 78, .09); border-radius: 23px; background: rgba(255,255,255,.46); transition: background var(--demo-highlight-duration, 150ms) ease-out, box-shadow var(--demo-highlight-duration, 150ms) ease-out; }
+      .kanban-lane.is-drop-target { background: rgba(255,255,255,.9); box-shadow: 0 0 0 3px rgba(91, 112, 252, .33), 0 20px 50px rgba(65,72,157,.11); }
+      .lane-title { display: flex; align-items: center; justify-content: space-between; margin: 2px 3px 13px; color: #38415a; font-size: 13px; font-weight: 750; }
+      .lane-title span { display: grid; min-width: 22px; height: 22px; padding: 0 6px; place-items: center; border-radius: 999px; color: #697287; background: rgba(255,255,255,.76); font-size: 11px; }
+      .board-cards { display: grid; align-content: start; gap: 10px; min-height: 316px; }
+      .board-card { display: grid; gap: 10px; padding: 15px; border: 1px solid rgba(34, 44, 76, .06); border-radius: 17px; background: rgba(255,255,255,.92); box-shadow: 0 6px 15px rgba(44,49,95,.06); cursor: grab; touch-action: none; user-select: none; }
+      .board-card:active { cursor: grabbing; }
+      .board-card.is-pointer-drag { opacity: .22; }
+      .board-card .ticket-top { display: flex; align-items: center; justify-content: space-between; color: #778095; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+      .board-card h2 { margin: 0; color: #263047; font-size: 15px; letter-spacing: -.025em; line-height: 1.2; }
+      .ticket-footer { display: flex; align-items: center; justify-content: space-between; color: #7d8799; font-size: 11px; }
+      .ticket-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff9d7a; box-shadow: 0 0 0 4px #fff0ea; }
+      .ticket-dot.violet { background: #8876ff; box-shadow: 0 0 0 4px #eeebff; }
+      .ticket-dot.blue { background: #4a91ff; box-shadow: 0 0 0 4px #e5f0ff; }
+
+      /* Elastic Shelf */
+      .shelf-variant { background: #101827; color: #eff4ff; }
+      .shelf-variant h1 { color: #f7f9ff; }
+      .shelf-variant .eyebrow { color: #8895ad; }
+      .shelf-variant .variant-summary { color: #a9b4c8; }
+      .shelf-variant .drag-hint { color: #9faec4; }
+      .shelf-variant .drag-hint kbd { border-color: #3b4a63; border-bottom-color: #4c5d78; background: #1b273a; color: #d6e2f8; }
+      .shelf-layout { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 22px; align-items: start; }
+      .shelf-panel { padding: 20px; border: 1px solid rgba(191, 210, 244, .12); border-radius: 26px; background: linear-gradient(145deg, rgba(34, 48, 72, .92), rgba(20, 31, 48, .92)); box-shadow: inset 0 1px rgba(255,255,255,.05), 0 24px 70px rgba(0,0,0,.26); }
+      .shelf-panel header, .tray-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 17px; }
+      .shelf-panel h2, .tray-header h2 { margin: 0; color: #f3f7ff; font-size: 15px; letter-spacing: -.02em; }
+      .shelf-panel header span, .tray-header span { color: #9caac0; font-size: 12px; }
+      .shelf-row { display: grid; grid-template-columns: repeat(4, minmax(124px, 1fr)); gap: 13px; min-height: 180px; }
+      .shelf-card { position: relative; min-height: 160px; padding: 15px; overflow: hidden; border: 1px solid rgba(199,216,255,.14); border-radius: 18px; background: linear-gradient(160deg, #324160, #1f2c43); box-shadow: inset 0 1px rgba(255,255,255,.07), 0 11px 25px rgba(1,8,20,.2); cursor: grab; touch-action: none; user-select: none; }
+      .shelf-card::before { position: absolute; right: -17px; bottom: -26px; width: 96px; height: 96px; border-radius: 50%; background: var(--orb, #6d8fff); content: ""; filter: blur(1px); opacity: .44; }
+      .shelf-card:active { cursor: grabbing; }
+      .shelf-card.is-pointer-drag { opacity: .2; }
+      .shelf-card .asset-type { position: relative; color: #c5d1e8; font-size: 10px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+      .shelf-card strong { position: relative; display: block; margin-top: 47px; color: #f8fbff; font-size: 14px; letter-spacing: -.018em; line-height: 1.13; }
+      .shelf-card small { position: relative; display: block; margin-top: 7px; color: #aab9d2; font-size: 11px; }
+      .inspiration-tray { min-height: 355px; padding: 20px; border: 1px solid rgba(186, 208, 250, .16); border-radius: 26px; background: linear-gradient(155deg, rgba(67,83,118,.58), rgba(30,42,66,.9)); box-shadow: inset 0 1px rgba(255,255,255,.08); transition: box-shadow var(--demo-highlight-duration, 150ms) ease-out, background var(--demo-highlight-duration, 150ms) ease-out; }
+      .inspiration-tray.is-drop-target { background: linear-gradient(155deg, rgba(94,113,161,.77), rgba(37,51,80,.96)); box-shadow: 0 0 0 3px rgba(143,176,255,.4), inset 0 1px rgba(255,255,255,.13), 0 22px 52px rgba(60,102,202,.28); }
+      .tray-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; min-height: 262px; }
+      .tray-grid .shelf-card { min-height: 116px; padding: 12px; border-radius: 15px; }
+      .tray-grid .shelf-card strong { margin-top: 27px; font-size: 12px; }
+      .tray-grid .shelf-card small { display: none; }
+      .tray-empty { display: grid; min-height: 262px; place-items: center; border: 1px dashed rgba(191,210,244,.23); border-radius: 16px; color: #9daec8; font-size: 13px; line-height: 1.45; text-align: center; }
+
+      @media (max-width: 760px) {
+        .variant { padding-top: 28px; }
+        .variant-heading { display: grid; gap: 16px; margin-bottom: 24px; }
+        .shelf-layout { grid-template-columns: 1fr; }
+        .shelf-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .inspiration-tray { min-height: 190px; }
+        .tray-grid, .tray-empty { min-height: 150px; }
+        .spring-lab { top: auto; right: 12px; bottom: 76px; width: min(340px, calc(100vw - 24px)); }
+        .spring-lab { max-height: calc(100dvh - 100px); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+      }
+
+      .proto-picker {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(10, 10, 10, 0.82);
+        -webkit-backdrop-filter: blur(12px) saturate(1.4);
+        backdrop-filter: blur(12px) saturate(1.4);
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+          0 8px 24px rgba(0, 0, 0, 0.24),
+          0 2px 6px rgba(0, 0, 0, 0.12);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 13px;
+        line-height: 1;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .proto-picker-highlight {
+        position: absolute;
+        top: 4px;
+        left: 0;
+        height: 28px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        will-change: transform;
+      }
+
+      /* The slide is enabled only after first paint (data-ready), so load doesn't animate. */
+      .proto-picker[data-ready] .proto-picker-highlight {
+        transition:
+          transform 250ms cubic-bezier(0.23, 1, 0.32, 1),
+          width 250ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .proto-picker[data-ready] .proto-picker-highlight { transition: none; }
+      }
+
+      .proto-picker-item {
+        position: relative; /* sits above the highlight */
+        display: flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.55);
+        font: inherit;
+        cursor: pointer;
+        transition: color 150ms ease-out;
+      }
+
+      .proto-picker-item:hover {
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      .proto-picker-item:active {
+        transform: scale(0.97);
+      }
+
+      .proto-picker-item:focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.4);
+        outline-offset: 2px;
+      }
+
+      .proto-picker-item[data-active] {
+        color: #fff;
+      }
+
+      .proto-picker-divider {
+        width: 1px;
+        height: 16px;
+        margin: 0 4px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .proto-picker-replay {
+        padding: 0 10px;
+        font-size: 14px;
+      }
+
+      .proto-picker[data-position="top"] {
+        bottom: auto;
+        top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="stage" class="stage" aria-live="polite"></main>
+
+    <aside class="spring-lab" data-open aria-label="Apple spring 调节">
+      <div class="spring-lab-header">
+        <div class="spring-lab-title" data-spring-lab-handle tabindex="0" aria-label="拖动动画面板；使用方向键微调位置"><strong data-motion-title>Apple spring</strong><span data-spring-component>Lift List · 独立配置</span></div>
+        <button class="spring-lab-toggle" type="button" aria-controls="spring-lab-body" aria-expanded="true">收起</button>
+      </div>
+      <div id="spring-lab-body" class="spring-lab-body">
+        <div class="spring-playback">
+          <span class="spring-playback-label" id="spring-playback-label">播放速度</span>
+          <div class="spring-playback-rates" role="group" aria-labelledby="spring-playback-label">
+            <button class="spring-preset" type="button" data-playback-rate="1" data-active aria-pressed="true" aria-label="1× 正常速度">1×</button>
+            <button class="spring-preset" type="button" data-playback-rate="0.75" aria-pressed="false" aria-label="0.75× 播放速度">0.75×</button>
+            <button class="spring-preset" type="button" data-playback-rate="0.5" aria-pressed="false" aria-label="0.5× 播放速度">0.5×</button>
+            <button class="spring-preset" type="button" data-playback-rate="0.25" aria-pressed="false" aria-label="0.25× 播放速度">0.25×</button>
+          </div>
+          <p class="spring-target-hint">仅影响演示速度，不改变参数和导出代码。拖拽始终跟手。</p>
+        </div>
+        <div class="spring-target-control"><label for="spring-target-select">调节对象</label><select id="spring-target-select" class="spring-target-select" data-spring-target-select aria-label="选择要调节的动效元素"></select><p class="spring-target-hint">点选或聚焦画布中的卡片，也会切换到它的独立参数。</p></div>
+        <div class="spring-effect-control"><label for="spring-effect-select">动效层</label><select id="spring-effect-select" class="spring-effect-select" data-spring-effect-select aria-label="选择当前元素要调节的真实动效层"></select><p class="spring-effect-hint">只显示当前组件实际使用的动效层。</p></div>
+        <div class="motion-modes" role="group" aria-label="当前元素动效层的动画模式">
+          <button class="spring-preset" type="button" data-motion-mode="spring" aria-pressed="true" data-active>Spring</button>
+          <button class="spring-preset" type="button" data-motion-mode="cubic" aria-pressed="false">Cubic Bézier</button>
+        </div>
+        <div class="spring-controls" data-motion-controls="spring">
+          <div class="spring-control"><label for="spring-response-number">响应时间 <small>ms</small></label><input id="spring-response-number" class="spring-number" data-spring-number="response" type="number" min="180" max="800" step="1" aria-label="响应时间，单位毫秒" /><input id="spring-response" class="spring-range" data-spring-input="response" type="range" min="180" max="800" step="1" /></div>
+          <div class="spring-control"><label for="spring-damping-number">阻尼系数</label><input id="spring-damping-number" class="spring-number" data-spring-number="dampingFraction" type="number" min="0.45" max="1.15" step="0.01" aria-label="阻尼系数" /><input id="spring-damping" class="spring-range" data-spring-input="dampingFraction" type="range" min="0.45" max="1.15" step="0.01" /></div>
+          <div class="spring-control"><label for="spring-velocity-number">初速度</label><input id="spring-velocity-number" class="spring-number" data-spring-number="initialVelocity" type="number" min="-8" max="8" step="0.25" aria-label="初速度" /><input id="spring-velocity" class="spring-range" data-spring-input="initialVelocity" type="range" min="-8" max="8" step="0.25" /></div>
+        </div>
+        <div class="spring-presets" data-motion-controls="spring" aria-label="Apple spring presets">
+          <button class="spring-preset" type="button" data-spring-preset="snappy">Snappy</button>
+          <button class="spring-preset" type="button" data-spring-preset="natural">Natural</button>
+          <button class="spring-preset" type="button" data-spring-preset="bouncy">Bouncy</button>
+        </div>
+        <div class="cubic-controls" data-motion-controls="cubic" hidden>
+          <div class="spring-control"><label for="cubic-duration">动画时长 <small>ms</small></label><input id="cubic-duration" class="spring-number" data-cubic-number="duration" type="number" min="80" max="2000" step="1" /><input class="spring-range" data-cubic-input="duration" type="range" min="80" max="2000" step="1" aria-label="Cubic 动画时长" /></div>
+          <div class="cubic-points">
+            <div class="spring-control"><label for="cubic-x1">X1</label><input id="cubic-x1" class="spring-number" data-cubic-number="x1" type="number" min="0" max="1" step="0.01" /><input class="spring-range" data-cubic-input="x1" type="range" min="0" max="1" step="0.01" aria-label="控制点 X1" /></div>
+            <div class="spring-control"><label for="cubic-y1">Y1</label><input id="cubic-y1" class="spring-number" data-cubic-number="y1" type="number" min="-1" max="2" step="0.01" /><input class="spring-range" data-cubic-input="y1" type="range" min="-1" max="2" step="0.01" aria-label="控制点 Y1" /></div>
+            <div class="spring-control"><label for="cubic-x2">X2</label><input id="cubic-x2" class="spring-number" data-cubic-number="x2" type="number" min="0" max="1" step="0.01" /><input class="spring-range" data-cubic-input="x2" type="range" min="0" max="1" step="0.01" aria-label="控制点 X2" /></div>
+            <div class="spring-control"><label for="cubic-y2">Y2</label><input id="cubic-y2" class="spring-number" data-cubic-number="y2" type="number" min="-1" max="2" step="0.01" /><input class="spring-range" data-cubic-input="y2" type="range" min="-1" max="2" step="0.01" aria-label="控制点 Y2" /></div>
+          </div>
+          <div class="spring-presets" aria-label="Cubic presets">
+            <button class="spring-preset" type="button" data-cubic-preset="ease">Ease</button>
+            <button class="spring-preset" type="button" data-cubic-preset="easeOut">Ease Out</button>
+            <button class="spring-preset" type="button" data-cubic-preset="easeInOut">Ease In Out</button>
+          </div>
+        </div>
+        <div class="spring-preview" aria-hidden="true"><span class="spring-preview-dot"></span></div>
+        <div class="spring-curve-card">
+          <div class="spring-curve-head"><strong data-motion-curve-title>响应曲线</strong><span data-spring-curve-caption>0–960 ms</span></div>
+          <svg class="spring-curve" viewBox="0 0 240 68" role="img" aria-label="当前 Apple spring 的物理响应曲线"><line class="spring-curve-grid" x1="0" y1="34" x2="240" y2="34"></line><line class="spring-curve-target" x1="0" y1="14" x2="240" y2="14"></line><polyline class="spring-curve-path" data-spring-curve points="0,54 240,14"></polyline></svg>
+        </div>
+        <p class="spring-lab-note" data-spring-note>响应越低越快；阻尼低于 1 会产生回弹。</p>
+        <button class="spring-preview-button" type="button" data-spring-preview>预览弹簧</button>
+        <details class="spring-export" data-spring-export>
+          <summary>导出代码 <span>当前卡片 · 当前动效层</span></summary>
+          <div class="spring-export-content">
+            <label for="spring-export-stack">技术栈</label>
+            <select id="spring-export-stack" class="spring-target-select" data-spring-export-stack>
+              <option value="web">Web · 原生 JavaScript</option>
+              <option value="react">React · Motion</option>
+              <option value="swiftui">iOS / macOS · SwiftUI</option>
+              <option value="compose">Android · Jetpack Compose</option>
+            </select>
+            <p class="spring-target-hint" data-spring-export-note></p>
+            <span class="spring-export-filename" data-spring-export-filename></span>
+            <textarea class="spring-export-code" data-spring-export-code readonly spellcheck="false" wrap="off" aria-label="当前动效层导出代码"></textarea>
+            <div class="spring-export-actions"><button class="spring-preset" type="button" data-spring-export-copy>复制代码</button><button class="spring-preset" type="button" data-spring-export-download>下载文件</button></div>
+            <p class="spring-export-status" data-spring-export-status role="status" aria-live="polite"></p>
+          </div>
+        </details>
+      </div>
+    </aside>
+
+    <nav class="proto-picker" aria-label="Prototype variants">
+      <span class="proto-picker-highlight" aria-hidden="true"></span>
+      <button class="proto-picker-item" data-active aria-current="true">Lift List</button>
+      <button class="proto-picker-item">Magnetic Board</button>
+      <button class="proto-picker-item">Elastic Shelf</button>
+      <span class="proto-picker-divider" aria-hidden="true"></span>
+      <button class="proto-picker-item proto-picker-replay" aria-label="Replay animation (R)">↻</button>
+    </nav>
+
+    <script>
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const springStorageKey = 'drag-spring-apple-settings-v4';
+      const legacyElementSpringStorageKey = 'drag-spring-apple-settings-v3';
+      const legacyComponentSpringStorageKey = 'drag-spring-apple-settings-v2';
+      const legacyUnifiedSpringStorageKey = 'drag-spring-apple-settings-v1';
+      const springLabLayoutStorageKey = 'drag-spring-lab-layout-v1';
+      const springDefaults = { response: 0.32, dampingFraction: 0.8, initialVelocity: 0 };
+      const springComponentKeys = ['lift', 'board', 'shelf'];
+      const springComponentLabels = { lift: 'Lift List', board: 'Magnetic Board', shelf: 'Elastic Shelf' };
+      const springTargets = {
+        lift: [
+          { key: 'lift-qa', label: 'QA the dark-mode pass' },
+          { key: 'lift-beta', label: 'Send the beta invitation' },
+          { key: 'lift-research', label: 'Review first-session notes' },
+          { key: 'lift-handoff', label: 'Package the handoff' }
+        ],
+        board: [
+          { key: 'board-rq-41', label: 'RQ-41 · Accessibility note' },
+          { key: 'board-rq-42', label: 'RQ-42 · Payment confirmation' },
+          { key: 'board-rq-37', label: 'RQ-37 · Empty-state narrative' },
+          { key: 'board-rq-39', label: 'RQ-39 · Saved flow' },
+          { key: 'board-rq-32', label: 'RQ-32 · Permission explainer' }
+        ],
+        shelf: [
+          { key: 'shelf-sequence', label: 'Sequence · Exit timing' },
+          { key: 'shelf-color', label: 'Color · Tonal lift' },
+          { key: 'shelf-type', label: 'Type · Soft display' },
+          { key: 'shelf-texture', label: 'Texture · Glass grain' }
+        ]
+      };
+      const springEffects = {
+        lift: [
+          { key: 'reflow', label: '列表重排' },
+          { key: 'landing', label: '松手落位' }
+        ],
+        board: [{ key: 'reflow', label: '目标列重排' }],
+        shelf: [{ key: 'reflow', label: '托盘 / 货架落位' }]
+      };
+      const springEffectSpeeds = { reflow: 1.1, landing: 1 };
+      const playbackRates = [1, 0.75, 0.5, 0.25];
+      let playbackRate = 1;
+      function setPlaybackRate(rate) {
+        if (!playbackRates.includes(rate)) return;
+        playbackRate = rate;
+        document.querySelectorAll('[data-playback-rate]').forEach((button) => {
+          const active = Number(button.dataset.playbackRate) === rate;
+          button.toggleAttribute('data-active', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        document.documentElement.style.setProperty('--demo-landing-duration', `${580 / rate}ms`);
+        document.documentElement.style.setProperty('--demo-highlight-duration', `${150 / rate}ms`);
+      }
+      const springPresets = {
+        snappy: { response: 0.24, dampingFraction: 0.92, initialVelocity: 0 },
+        natural: { response: 0.32, dampingFraction: 0.8, initialVelocity: 0 },
+        bouncy: { response: 0.46, dampingFraction: 0.58, initialVelocity: 0 }
+      };
+      const springProfiles = loadSpringProfiles();
+      const cubicStorageKey = 'drag-spring-cubic-settings-v1';
+      const cubicDefaults = { duration: 320, x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 };
+      const cubicPresets = {
+        ease: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 },
+        easeOut: { x1: 0, y1: 0, x2: 0.58, y2: 1 },
+        easeInOut: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 }
+      };
+      const motionBySpring = new WeakMap();
+      const motionProfiles = loadMotionProfiles();
+      let activeSpringComponent = 'lift';
+      const activeSpringTargets = Object.fromEntries(springComponentKeys.map((component) => [component, springTargets[component][0].key]));
+      const activeSpringEffects = Object.fromEntries(springComponentKeys.map((component) => [component, springEffects[component][0].key]));
+      let activeSpringTarget = activeSpringTargets[activeSpringComponent];
+      let activeSpringEffect = activeSpringEffects[activeSpringComponent];
+      let springSettings = springProfiles[activeSpringComponent][activeSpringTarget][activeSpringEffect];
+      let cancelSpringPreview = null;
+
+      function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+      function normalizeCubic(source) {
+        return Object.fromEntries(Object.entries(cubicDefaults).map(([key, fallback]) => {
+          const value = source?.[key];
+          const min = key === 'duration' ? 80 : key.startsWith('x') ? 0 : -1;
+          const max = key === 'duration' ? 2000 : key.startsWith('x') ? 1 : 2;
+          const valid = typeof value === 'number' && Number.isFinite(value) ? clamp(value, min, max) : fallback;
+          return [key, key === 'duration' ? Math.round(valid) : valid];
+        }));
+      }
+
+      function loadMotionProfiles() {
+        let stored;
+        try { stored = JSON.parse(localStorage.getItem(cubicStorageKey)); } catch { /* Use isolated defaults. */ }
+        return Object.fromEntries(springComponentKeys.map(component => [component,
+          Object.fromEntries(springTargets[component].map(target => [target.key,
+            Object.fromEntries(springEffects[component].map(effect => {
+              const source = stored?.[component]?.[target.key]?.[effect.key];
+              const profile = { mode: source?.mode === 'cubic' ? 'cubic' : 'spring', cubic: normalizeCubic(source?.cubic) };
+              motionBySpring.set(springProfiles[component][target.key][effect.key], profile);
+              return [effect.key, profile];
+            }))
+          ]))
+        ]));
+      }
+
+      function currentMotion() { return motionProfiles[activeSpringComponent][activeSpringTarget][activeSpringEffect]; }
+      function saveMotionProfiles() {
+        try { localStorage.setItem(cubicStorageKey, JSON.stringify(motionProfiles)); } catch { /* Storage can be unavailable. */ }
+      }
+
+      function cubicProgress(fraction, { x1, y1, x2, y2 }) {
+        if (fraction <= 0) return 0;
+        if (fraction >= 1) return 1;
+        const coordinate = (t, a, b) => 3 * (1-t)**2 * t * a + 3 * (1-t) * t*t * b + t*t*t;
+        let low = 0, high = 1;
+        // Invert Bezier X (elapsed fraction), then evaluate Y; do not use fraction as t.
+        for (let i = 0; i < 32; i++) {
+          const t = (low + high) / 2;
+          const x = coordinate(t, x1, x2);
+          if (x === fraction) return coordinate(t, y1, y2);
+          if (x < fraction) low = t; else high = t;
+        }
+        return coordinate((low + high) / 2, y1, y2);
+      }
+
+      function cubicValue({ from = 0, to = 1, settings, onUpdate, onComplete }) {
+        const cubic = { ...settings };
+        let elapsed = 0, lastTime = performance.now(), frameId;
+        function frame(now) {
+          elapsed += Math.min(Math.max(0, now-lastTime), 32) * playbackRate;
+          lastTime = now;
+          const fraction = Math.min(1, elapsed / cubic.duration);
+          onUpdate(from + (to-from) * cubicProgress(fraction, cubic));
+          if (fraction >= 1) { onComplete?.(); return; }
+          frameId = requestAnimationFrame(frame);
+        }
+        frameId = requestAnimationFrame(frame);
+        return () => cancelAnimationFrame(frameId);
+      }
+
+      function normalizeSpringSettings(source) {
+        const number = (key, fallback) => Number.isFinite(Number(source?.[key])) ? Number(source[key]) : fallback;
+        return {
+          response: clamp(number('response', springDefaults.response), 0.18, 0.8),
+          dampingFraction: clamp(number('dampingFraction', springDefaults.dampingFraction), 0.45, 1.15),
+          initialVelocity: clamp(number('initialVelocity', springDefaults.initialVelocity), -8, 8)
+        };
+      }
+
+      function createSpringProfiles(source) {
+        return Object.fromEntries(springComponentKeys.map((component) => {
+          const componentSource = source?.[component] ?? source;
+          const componentFallback = normalizeSpringSettings(componentSource);
+          return [component, Object.fromEntries(springTargets[component].map((target) => {
+            const targetSource = componentSource?.[target.key] ?? componentFallback;
+            return [target.key, Object.fromEntries(springEffects[component].map((effect) => [effect.key, normalizeSpringSettings(targetSource?.[effect.key] ?? targetSource)]))];
+          }))];
+        }));
+      }
+
+      function persistSpringProfiles(profiles) {
+        try { localStorage.setItem(springStorageKey, JSON.stringify(profiles)); } catch { /* File previews can disable storage. */ }
+        return profiles;
+      }
+
+      function loadSpringProfiles() {
+        try {
+          const stored = JSON.parse(localStorage.getItem(springStorageKey));
+          if (stored && springComponentKeys.every((key) => stored[key])) {
+            return createSpringProfiles(stored);
+          }
+          const legacyElement = JSON.parse(localStorage.getItem(legacyElementSpringStorageKey));
+          if (legacyElement) return persistSpringProfiles(createSpringProfiles(legacyElement));
+          const legacyComponent = JSON.parse(localStorage.getItem(legacyComponentSpringStorageKey));
+          if (legacyComponent) return persistSpringProfiles(createSpringProfiles(legacyComponent));
+          const unified = JSON.parse(localStorage.getItem(legacyUnifiedSpringStorageKey));
+          return persistSpringProfiles(createSpringProfiles(unified));
+        } catch {
+          return createSpringProfiles();
+        }
+      }
+
+      function saveSpringSettings() {
+        try { localStorage.setItem(springStorageKey, JSON.stringify(springProfiles)); } catch { /* File previews can disable storage. */ }
+      }
+
+      function loadSpringLabPosition() {
+        try {
+          const stored = JSON.parse(localStorage.getItem(springLabLayoutStorageKey));
+          return Number.isFinite(stored?.left) && Number.isFinite(stored?.top) ? stored : null;
+        } catch { return null; }
+      }
+
+      function saveSpringLabPosition(position) {
+        try { localStorage.setItem(springLabLayoutStorageKey, JSON.stringify(position)); } catch { /* File previews can disable storage. */ }
+      }
+
+      function setSpringLabPosition(lab, left, top, persist = true) {
+        const rect = lab.getBoundingClientRect();
+        const inset = 12;
+        const position = {
+          left: Math.round(clamp(left, inset, Math.max(inset, window.innerWidth - rect.width - inset))),
+          top: Math.round(clamp(top, inset, Math.max(inset, window.innerHeight - rect.height - inset)))
+        };
+        lab.style.left = `${position.left}px`;
+        lab.style.top = `${position.top}px`;
+        lab.style.right = 'auto';
+        lab.style.bottom = 'auto';
+        lab.toggleAttribute('data-positioned', true);
+        if (persist) saveSpringLabPosition(position);
+      }
+
+      function selectSpringComponent(index) {
+        const nextComponent = springComponentKeys[index];
+        if (!nextComponent || nextComponent === activeSpringComponent) return;
+        activeSpringComponent = nextComponent;
+        activeSpringTarget = activeSpringTargets[activeSpringComponent];
+        activeSpringEffect = activeSpringEffects[activeSpringComponent];
+        springSettings = springProfiles[activeSpringComponent][activeSpringTarget][activeSpringEffect];
+        if (document.querySelector('.spring-lab')) {
+          syncSpringLab();
+          replaySpringPreview();
+        }
+      }
+
+      function selectSpringTarget(target) {
+        if (!springTargets[activeSpringComponent].some((entry) => entry.key === target)) return;
+        activeSpringTarget = target;
+        activeSpringTargets[activeSpringComponent] = target;
+        springSettings = springProfiles[activeSpringComponent][activeSpringTarget][activeSpringEffect];
+        syncSpringLab();
+        replaySpringPreview();
+      }
+
+      function selectSpringEffect(effect) {
+        if (!springEffects[activeSpringComponent].some((entry) => entry.key === effect)) return;
+        activeSpringEffect = effect;
+        activeSpringEffects[activeSpringComponent] = effect;
+        springSettings = springProfiles[activeSpringComponent][activeSpringTarget][activeSpringEffect];
+        syncSpringLab();
+        replaySpringPreview();
+      }
+
+      function springSettingsForElement(element, effect = 'reflow') {
+        return springProfiles[activeSpringComponent]?.[element?.dataset?.motionTarget]?.[effect] || springSettings;
+      }
+
+      function appleSpring({ mass = 1, speed = 1, initialVelocity, settings = springSettings } = {}) {
+        const response = clamp(settings.response / speed, 0.12, 1.2);
+        const angularFrequency = (2 * Math.PI) / response;
+        return {
+          stiffness: angularFrequency ** 2 * mass,
+          damping: 2 * settings.dampingFraction * angularFrequency * mass,
+          initialVelocity: initialVelocity ?? settings.initialVelocity
+        };
+      }
+
+      function springValue({ from = 0, to = 1, mass = 1, speed = 1, initialVelocity, settings, onUpdate, onComplete }) {
+        if (reduceMotion.matches) {
+          onUpdate(to);
+          onComplete?.();
+          return () => {};
+        }
+        const motion = motionBySpring.get(settings || springSettings);
+        if (motion?.mode === 'cubic') return cubicValue({ from, to, settings: motion.cubic, onUpdate, onComplete });
+        const spring = appleSpring({ mass, speed, initialVelocity, settings });
+        let value = from;
+        let velocity = spring.initialVelocity * (to - from);
+        let lastTime = performance.now();
+        const step = 1 / 240;
+        let elapsed = 0;
+        let frameId;
+        function frame(now) {
+          // Fixed simulation steps keep the trajectory identical at every playback rate.
+          elapsed += Math.min((now - lastTime) / 1000, 0.032) * playbackRate;
+          lastTime = now;
+          let settled = false;
+          while (elapsed + 1e-10 >= step) {
+            elapsed = Math.max(0, elapsed - step);
+            const force = -spring.stiffness * (value - to);
+            const dampingForce = -spring.damping * velocity;
+            velocity += ((force + dampingForce) / mass) * step;
+            value += velocity * step;
+            if (Math.abs(velocity) < 0.015 && Math.abs(value - to) < 0.015) {
+              settled = true;
+              break;
+            }
+          }
+          onUpdate(value);
+          if (settled) {
+            onUpdate(to);
+            onComplete?.();
+            return;
+          }
+          frameId = requestAnimationFrame(frame);
+        }
+        frameId = requestAnimationFrame(frame);
+        return () => cancelAnimationFrame(frameId);
+      }
+
+      function springTransform(element, x, y, options = {}, done) {
+        springValue({
+          from: 0,
+          to: 1,
+          speed: options.speed || 1,
+          initialVelocity: options.initialVelocity,
+          settings: options.settings || springSettingsForElement(element, options.effect || 'reflow'),
+          onUpdate(progress) {
+            element.style.transform = `translate3d(${x * (1 - progress)}px, ${y * (1 - progress)}px, 0)`;
+            if (options.opacityFrom !== undefined) element.style.opacity = options.opacityFrom + (1 - options.opacityFrom) * progress;
+          },
+          onComplete() {
+            element.style.transform = '';
+            element.style.opacity = '';
+            done?.();
+          }
+        });
+      }
+
+      function springFlip(elements, mutate, effect = 'reflow') {
+        const before = new Map(elements.map((element) => [element, element.getBoundingClientRect()]));
+        mutate();
+        elements.forEach((element) => {
+          const first = before.get(element);
+          const last = element.getBoundingClientRect();
+          if (!first || !last || (!first.width && !last.width)) return;
+          const x = first.left - last.left;
+          const y = first.top - last.top;
+          if (Math.abs(x) < 1 && Math.abs(y) < 1) return;
+          springTransform(element, x, y, { speed: springEffectSpeeds[effect], effect, settings: springSettingsForElement(element, effect) });
+        });
+      }
+
+      function matchingPreset() {
+        return Object.entries(springPresets).find(([, preset]) => Object.keys(preset).every((key) => Math.abs(preset[key] - springSettings[key]) < 0.006))?.[0];
+      }
+
+      function controlValue(key) {
+        return key === 'response' ? Math.round(springSettings.response * 1000) : springSettings[key];
+      }
+
+      function settingValue(input) {
+        const raw = Number(input.value);
+        const min = Number(input.min);
+        const max = Number(input.max);
+        if (!Number.isFinite(raw) || raw < min || raw > max) return null;
+        return input.dataset.springInput === 'response' || input.dataset.springNumber === 'response' ? raw / 1000 : raw;
+      }
+
+      function drawSpringCurve() {
+        const lab = document.querySelector('.spring-lab');
+        const curve = lab.querySelector('[data-spring-curve]');
+        const targetLabel = springTargets[activeSpringComponent].find((entry) => entry.key === activeSpringTarget)?.label;
+        const effectLabel = springEffects[activeSpringComponent].find((entry) => entry.key === activeSpringEffect)?.label;
+        const motion = currentMotion();
+        if (motion.mode === 'cubic') {
+          const values = Array.from({ length: 73 }, (_, i) => cubicProgress(i / 72, motion.cubic));
+          const min = Math.min(0, ...values), max = Math.max(1, ...values);
+          const y = value => 60 - (value - min) / (max - min) * 52;
+          curve.setAttribute('points', values.map((value, i) => `${(240*i/72).toFixed(1)},${y(value).toFixed(1)}`).join(' '));
+          for (const [selector, value] of [['.spring-curve-grid', 0], ['.spring-curve-target', 1]]) {
+            const line = lab.querySelector(selector);
+            line.setAttribute('y1', y(value)); line.setAttribute('y2', y(value));
+          }
+          lab.querySelector('[data-spring-curve-caption]').textContent = `0–${motion.cubic.duration} ms · 时间 →`;
+          curve.closest('svg').setAttribute('aria-label', `${targetLabel} · ${effectLabel} 的 Cubic Bézier 时间与进度曲线`);
+          return;
+        }
+        for (const [selector, value] of [['.spring-curve-grid', 34], ['.spring-curve-target', 14]]) {
+          const line = lab.querySelector(selector);
+          line.setAttribute('y1', value); line.setAttribute('y2', value);
+        }
+        const duration = clamp(springSettings.response * 3.2, 0.48, 1.6);
+        const steps = 72;
+        const dt = duration / steps;
+        const spring = appleSpring();
+        let value = 0;
+        let velocity = spring.initialVelocity;
+        const points = [];
+        for (let step = 0; step <= steps; step++) {
+          const x = (240 * step) / steps;
+          const y = clamp(54 - value * 40, 4, 64);
+          points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+          const force = -spring.stiffness * (value - 1);
+          const dampingForce = -spring.damping * velocity;
+          velocity += ((force + dampingForce) * dt);
+          value += velocity * dt;
+        }
+        curve.setAttribute('points', points.join(' '));
+        lab.querySelector('[data-spring-curve-caption]').textContent = `0–${Math.round(duration * 1000)} ms`;
+        curve.closest('svg').setAttribute('aria-label', `${targetLabel} · ${effectLabel} 的物理弹簧响应曲线`);
+      }
+
+      function syncSpringLab() {
+        const lab = document.querySelector('.spring-lab');
+        const motion = currentMotion();
+        lab.dataset.motionMode = motion.mode;
+        lab.setAttribute('aria-label', '动画调节 · ' + (motion.mode === 'cubic' ? 'Cubic Bézier' : 'Apple spring'));
+        lab.querySelector('[data-motion-title]').textContent = motion.mode === 'cubic' ? 'Cubic Bézier' : 'Apple spring';
+        lab.querySelectorAll('[data-motion-mode]').forEach(button => {
+          const selected = button.dataset.motionMode === motion.mode;
+          button.toggleAttribute('data-active', selected);
+          button.setAttribute('aria-pressed', String(selected));
+        });
+        lab.querySelectorAll('[data-motion-controls]').forEach(group => group.hidden = group.dataset.motionControls !== motion.mode);
+        lab.querySelectorAll('[data-cubic-input], [data-cubic-number]').forEach(input => {
+          input.value = motion.cubic[input.dataset.cubicInput || input.dataset.cubicNumber];
+        });
+        lab.querySelectorAll('[data-cubic-preset]').forEach(button => {
+          const preset = cubicPresets[button.dataset.cubicPreset];
+          const active = Object.keys(preset).every(key => Math.abs(preset[key]-motion.cubic[key]) < 1e-6);
+          button.toggleAttribute('data-active', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        lab.querySelector('[data-spring-preview]').textContent = motion.mode === 'cubic' ? '预览 Cubic' : '预览弹簧';
+        lab.querySelector('[data-motion-curve-title]').textContent = motion.mode === 'cubic' ? 'Cubic 曲线' : '响应曲线';
+        const componentLabel = springComponentLabels[activeSpringComponent];
+        const targetLabel = springTargets[activeSpringComponent].find((entry) => entry.key === activeSpringTarget)?.label;
+        const effectLabel = springEffects[activeSpringComponent].find((entry) => entry.key === activeSpringEffect)?.label;
+        lab.dataset.springComponent = activeSpringComponent;
+        lab.dataset.springEffect = activeSpringEffect;
+        lab.querySelector('[data-spring-component]').textContent = `${componentLabel} · ${targetLabel} · ${effectLabel} · 独立配置`;
+        const targetSelect = lab.querySelector('[data-spring-target-select]');
+        targetSelect.innerHTML = springTargets[activeSpringComponent].map((entry) => `<option value="${entry.key}">${entry.label}</option>`).join('');
+        targetSelect.value = activeSpringTarget;
+        const effectSelect = lab.querySelector('[data-spring-effect-select]');
+        effectSelect.innerHTML = springEffects[activeSpringComponent].map((entry) => `<option value="${entry.key}">${entry.label}</option>`).join('');
+        effectSelect.value = activeSpringEffect;
+        document.querySelectorAll('[data-motion-target]').forEach((element) => element.toggleAttribute('data-spring-selected', element.dataset.motionTarget === activeSpringTarget));
+        lab.querySelectorAll('[data-spring-input], [data-spring-number]').forEach((input) => {
+          const key = input.dataset.springInput || input.dataset.springNumber;
+          input.value = controlValue(key);
+        });
+        const preset = matchingPreset();
+        lab.querySelectorAll('[data-spring-preset]').forEach((button) => {
+          const active = button.dataset.springPreset === preset;
+          button.toggleAttribute('data-active', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        lab.querySelector('[data-spring-note]').textContent = springSettings.dampingFraction < 1
+          ? `${targetLabel} · ${effectLabel}：响应 ${controlValue('response')} ms；阻尼低于 1，会在落位后回弹。`
+          : `${targetLabel} · ${effectLabel}：响应 ${controlValue('response')} ms；阻尼 ≥ 1，落位时不回弹。`;
+        if (motion.mode === 'cubic') {
+          const c = motion.cubic;
+          lab.querySelector('[data-spring-note]').textContent = `cubic-bezier(${c.x1}, ${c.y1}, ${c.x2}, ${c.y2}) · ${c.duration} ms。X 为时间，Y 为进度；Y 可超出 0–1 产生回拉或超调。仅作用于当前元素的当前层。`;
+        }
+        const toggle = lab.querySelector('.spring-lab-toggle');
+        toggle.textContent = lab.hasAttribute('data-open') ? '收起' : '调节';
+        toggle.setAttribute('aria-expanded', String(lab.hasAttribute('data-open')));
+        drawSpringCurve();
+        syncSpringExport();
+      }
+
+      function buildCubicExport(stack = 'web') {
+        const c = { ...currentMotion().cubic };
+        const points = [c.x1, c.y1, c.x2, c.y2];
+        const seconds = c.duration / 1000;
+        const scope = `${activeSpringComponent} / ${activeSpringTarget} / ${activeSpringEffect}`;
+        const header = `// Cubic Bézier · ${scope}\n// ${c.duration} ms · cubic-bezier(${points.join(', ')})\n// Nominal duration; preview slow playback is NOT exported.\n// Progress is 0 to 1; map it to from + (to - from) * progress.\n// Helpers do not include drag/drop or layout. Cancel the previous run before retargeting.\n// Capture the live visual value as the next start; cubic timing does not preserve spring velocity.`;
+        const webBody = `export const cubicSettings = ${JSON.stringify(c, null, 2)};
+
+${cubicProgress.toString()}
+
+export function animateCubicProgress(onUpdate, {
+  reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  onComplete
+} = {}) {
+  if (reduceMotion) { onUpdate(1); onComplete?.(); return () => {}; }
+  let elapsed = 0, lastTime = performance.now(), frameId;
+  function frame(now) {
+    elapsed += Math.min(Math.max(0, now - lastTime), 32);
+    lastTime = now;
+    const fraction = Math.min(1, elapsed / cubicSettings.duration);
+    onUpdate(cubicProgress(fraction, cubicSettings));
+    if (fraction >= 1) { onComplete?.(); return; }
+    frameId = requestAnimationFrame(frame);
+  }
+  frameId = requestAnimationFrame(frame);
+  return () => cancelAnimationFrame(frameId);
+}
+
+// const cancel = animateCubicProgress(p => {
+//   element.style.transform = 'translateX(' + (fromX + (toX - fromX) * p) + 'px)';
+// });
+// cancel(); // Before retargeting or unmounting.
+// CSS equivalent: transition: transform ${c.duration}ms cubic-bezier(${points.join(', ')});`;
+        const reactBody = `import { animate } from "motion/react";
+
+export const cubicTransition = {
+  type: "tween",
+  duration: ${seconds},
+  ease: [${points.join(', ')}]
+};
+
+export function animateCubicProgress(onUpdate, { reduceMotion = false, onComplete } = {}) {
+  if (reduceMotion) { onUpdate(1); onComplete?.(); return () => {}; }
+  const controls = animate(0, 1, { ...cubicTransition, onUpdate, onComplete });
+  return () => controls.stop();
+}
+
+// In React, import useEffect and useReducedMotion:
+// const reduceMotion = useReducedMotion();
+// useEffect(() => animateCubicProgress(p => {
+//   x.set(fromX + (toX - fromX) * p);
+// }, { reduceMotion }), [moveId, reduceMotion]);
+// x is a MotionValue; capture fromX/toX for each move. Effect cleanup cancels the run.`;
+        const swiftBody = `import SwiftUI
+
+enum SelectedCubic {
+    static let animation = Animation.timingCurve(${points.join(', ')}, duration: ${seconds})
+
+    static func apply(reduceMotion: Bool, updates: () -> Void) {
+        withAnimation(reduceMotion ? nil : animation) { updates() }
+    }
+}
+
+// In a View: @Environment(\\.accessibilityReduceMotion) var reduceMotion
+// SelectedCubic.apply(reduceMotion: reduceMotion) { offsetX = targetX }
+// offsetX is @State, consumed by .offset(x: offsetX).
+// SwiftUI handles interpolation and interruption; verify motion in the target app.`;
+        const composeBody = `import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+
+object SelectedCubic {
+    val spec = tween<Float>(
+        durationMillis = ${c.duration},
+        easing = CubicBezierEasing(${points.map(v => v + 'f').join(', ')})
+    )
+
+    suspend fun animateProgress(reduceMotion: Boolean, onUpdate: (Float) -> Unit) {
+        if (reduceMotion) { onUpdate(1f); return }
+        animate(initialValue = 0f, targetValue = 1f, animationSpec = spec) { value, _ ->
+            onUpdate(value)
+        }
+        onUpdate(1f)
+    }
+}
+
+// In a Composable, import androidx.compose.runtime.LaunchedEffect:
+// LaunchedEffect(moveId, reduceMotion) {
+//     SelectedCubic.animateProgress(reduceMotion) { p ->
+//         offsetX = fromX + (toX - fromX) * p
+//     }
+// }
+// offsetX is Compose state. Changing moveId / leaving composition cancels the run.
+// Capture the live visual offset as fromX before retargeting.`;
+        const variants = {
+          web: { extension: 'js', body: webBody }, react: { extension: 'js', body: reactBody },
+          swiftui: { extension: 'swift', body: swiftBody }, compose: { extension: 'kt', body: composeBody }
+        };
+        const selected = variants[stack] || variants.web;
+        return {
+          code: header + '\n\n' + selected.body + '\n',
+          filename: `${activeSpringTarget}-${activeSpringEffect}-cubic-${stack}.${selected.extension}`,
+          note: `当前元素 · 当前层的 Cubic Bézier 代码，时长 ${c.duration} ms；不包含慢放倍率或 Spring 参数。${stack === 'web' ? '无依赖 JS，并附 CSS 等价写法。' : '需在目标项目接入并验证原生插值与中断效果。'}`,
+          settings: c, mode: 'cubic', speed: 1
+        };
+      }
+
+      function buildSpringExport(stack = 'web') {
+        if (currentMotion().mode === 'cubic') return buildCubicExport(stack);
+        const component = activeSpringComponent;
+        const target = activeSpringTarget;
+        const effect = activeSpringEffect;
+        const settings = { ...springProfiles[component][target][effect] };
+        const speed = springEffectSpeeds[effect];
+        const physics = appleSpring({ settings, speed });
+        const effectiveResponse = clamp(settings.response / speed, 0.12, 1.2);
+        const targetLabel = springTargets[component].find((entry) => entry.key === target).label;
+        const effectLabel = springEffects[component].find((entry) => entry.key === effect).label;
+        const header = [
+          '// ' + springComponentLabels[component] + ' / ' + targetLabel + ' / ' + effectLabel,
+          '// Scope: ' + target + ' / ' + effect,
+          '// Response: ' + Math.round(settings.response * 1000) + ' ms; damping fraction: ' + settings.dampingFraction,
+          '// Initial velocity: ' + settings.initialVelocity + ' progress units/second (0 -> 1).',
+          '// Interaction speed: ' + speed + 'x; effective response: ' + effectiveResponse.toFixed(6) + ' s.',
+          '// Response is not the total settling duration.',
+          '// Reusable motion helper; attach it to this card/effect in your own UI.'
+        ].join('\n');
+        const physicalConfig = JSON.stringify({
+          mass: 1,
+          stiffness: physics.stiffness,
+          damping: physics.damping,
+          initialVelocity: physics.initialVelocity
+        }, null, 2);
+        const webBody = [
+          'export const spring = ' + physicalConfig + ';',
+          '',
+          '// Matches this prototype solver. Returns a cleanup/cancel function.',
+          'export function animateSpringProgress({ onUpdate, onComplete }) {',
+          '  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {',
+          '    onUpdate(1);',
+          '    onComplete?.();',
+          '    return () => {};',
+          '  }',
+          '  let progress = 0;',
+          '  let velocity = spring.initialVelocity;',
+          '  let lastTime = performance.now();',
+          '  let frameId;',
+          '  function frame(now) {',
+          '    const dt = Math.min((now - lastTime) / 1000, 0.032);',
+          '    lastTime = now;',
+          '    const force = -spring.stiffness * (progress - 1);',
+          '    velocity += ((force - spring.damping * velocity) / spring.mass) * dt;',
+          '    progress += velocity * dt;',
+          '    onUpdate(progress);',
+          '    if (Math.abs(velocity) < 0.015 && Math.abs(progress - 1) < 0.015) {',
+          '      onUpdate(1);',
+          '      onComplete?.();',
+          '      return;',
+          '    }',
+          '    frameId = requestAnimationFrame(frame);',
+          '  }',
+          '  frameId = requestAnimationFrame(frame);',
+          '  return () => cancelAnimationFrame(frameId);',
+          '}',
+          '',
+          '// Capture the visual start offset AFTER moving the card into its target layout.',
+          '// const cancel = animateSpringProgress({',
+          '//   onUpdate: p => { card.style.transform =',
+          '//     "translate3d(" + dx * (1 - p) + "px," + dy * (1 - p) + "px,0)"; },',
+          '//   onComplete: () => { card.style.transform = ""; }',
+          '// });',
+          '// Cancel the previous run before starting a new run on the same property.'
+        ].join('\n');
+        const reactBody = [
+          '// Requires the motion package: npm install motion',
+          '// Motion hybrid animate API; usable inside a React effect/event handler.',
+          'import { animate } from "motion";',
+          '',
+          'export const spring = ' + physicalConfig + ';',
+          '',
+          '// Animate normalized progress so initial velocity is distance-independent.',
+          'export function animateSpringProgress({ onUpdate, onComplete }) {',
+          '  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {',
+          '    onUpdate(1);',
+          '    onComplete?.();',
+          '    return () => {};',
+          '  }',
+          '  const controls = animate(0, 1, {',
+          '    type: "spring",',
+          '    mass: spring.mass,',
+          '    stiffness: spring.stiffness,',
+          '    damping: spring.damping,',
+          '    velocity: spring.initialVelocity,',
+          '    restSpeed: 0.015,',
+          '    restDelta: 0.015,',
+          '    onUpdate,',
+          '    onComplete',
+          '  });',
+          '  return () => controls.stop();',
+          '}',
+          '',
+          '// React integration (import useEffect from "react";',
+          '// import { motion, useMotionValue } from "motion/react"):',
+          '// const x = useMotionValue(fromX);',
+          '// useEffect(() => animateSpringProgress({',
+          '//   onUpdate: p => x.set(fromX + (toX - fromX) * p)',
+          '// }), [x, fromX, toX]);',
+          '// Render <motion.div style={{ x }}>...</motion.div>.',
+          '// The effect cleanup stops the previous run and handles unmount.',
+          '// For direct property animation, velocity = initialVelocity * (to - from).',
+          '// Do not substitute response for duration; Motion uses its own solver.'
+        ].join('\n');
+        const swiftBody = [
+          'import SwiftUI',
+          '',
+          'enum SelectedSpring {',
+          '    // Pass the view environment value for accessibilityReduceMotion.',
+          '    static func animation(reduceMotion: Bool) -> Animation? {',
+          '        guard !reduceMotion else { return nil }',
+          '        return .interpolatingSpring(',
+          '            mass: 1.0,',
+          '            stiffness: ' + physics.stiffness + ',',
+          '            damping: ' + physics.damping + ',',
+          '            initialVelocity: ' + Number(physics.initialVelocity).toFixed(6),
+          '        )',
+          '    }',
+          '}',
+          '',
+          '// In your View:',
+          '// @Environment(\\.accessibilityReduceMotion) private var reduceMotion',
+          '// withAnimation(SelectedSpring.animation(reduceMotion: reduceMotion)) {',
+          '//     offset = targetOffset',
+          '// }',
+          '// initialVelocity is relative to the full animated displacement.',
+          '// SwiftUI solves the spring natively and handles interruption differently.'
+        ].join('\n');
+        const composeBody = [
+          '// Requires androidx.compose.animation:animation-core in a Compose project.',
+          'import androidx.compose.animation.core.animate',
+          'import androidx.compose.animation.core.spring',
+          '',
+          'object SelectedSpring {',
+          '    // Compose uses unit mass and a dimensionless damping ratio.',
+          '    val spec = spring<Float>(',
+          '        dampingRatio = ' + settings.dampingFraction + 'f,',
+          '        stiffness = ' + physics.stiffness.toFixed(6) + 'f,',
+          '        visibilityThreshold = 0.015f',
+          '    )',
+          '    const val initialVelocity = ' + settings.initialVelocity + 'f',
+          '',
+          '    // Call from LaunchedEffect or a Compose animation coroutine.',
+          '    // Pass your app reduced-motion preference explicitly.',
+          '    suspend fun animateProgress(',
+          '        reduceMotion: Boolean,',
+          '        onUpdate: (Float) -> Unit',
+          '    ) {',
+          '        if (reduceMotion) {',
+          '            onUpdate(1f)',
+          '            return',
+          '        }',
+          '        animate(',
+          '            initialValue = 0f,',
+          '            targetValue = 1f,',
+          '            initialVelocity = initialVelocity,',
+          '            animationSpec = spec',
+          '        ) { value, _ -> onUpdate(value) }',
+          '        onUpdate(1f)',
+          '    }',
+          '}',
+          '',
+          '// In your Composable (import androidx.compose.runtime.LaunchedEffect):',
+          '// LaunchedEffect(moveId, reduceMotion) {',
+          '//     SelectedSpring.animateProgress(reduceMotion) { progress ->',
+          '//         offsetX = fromX + (toX - fromX) * progress',
+          '//     }',
+          '// }',
+          '// offsetX is Compose state; fromX/toX share the same units.',
+          '// Changing moveId or leaving composition cancels the previous run.',
+          '// For retargeting, capture the live visual offset as the next fromX.',
+          '// This helper restarts with the exported velocity for each move.',
+          '// Direct property animation: velocity = initialVelocity * (to - from).',
+          '// Compose uses its own solver and settling thresholds.'
+        ].join('\n');
+        const variants = {
+          web: { extension: 'js', body: webBody, note: '无依赖的弹簧驱动函数，使用本页同一求解方式。' },
+          react: { extension: 'js', body: reactBody, note: '需要 motion 包，包含 React 接入示例；原生求解器的收敛与中断表现可能略有差异。' },
+          swiftui: { extension: 'swift', body: swiftBody, note: '使用 SwiftUI 原生 interpolatingSpring，保留初速度；最终手感需在 Apple 设备上核对。' },
+          compose: { extension: 'kt', body: composeBody, note: 'Kotlin：spring 使用阻尼比与刚度，animate 单独传入初速度；包含协程接入示例，最终手感需在 Android 上核对。' }
+        };
+        const selected = variants[stack] || variants.web;
+        return {
+          code: header + '\n\n' + selected.body + '\n',
+          filename: target + '-' + effect + '-' + stack + '.' + selected.extension,
+          note: selected.note + ' 已计入当前动效 ' + speed + '× 速度。导出范围为当前动效的弹簧代码，拖拽与布局逻辑由目标项目接入。',
+          settings, speed, physics
+        };
+      }
+
+      function syncSpringExport() {
+        const lab = document.querySelector('.spring-lab');
+        const stack = lab.querySelector('[data-spring-export-stack]');
+        if (!stack) return;
+        const exported = buildSpringExport(stack.value);
+        const code = lab.querySelector('[data-spring-export-code]');
+        code.value = exported.code;
+        code.setSelectionRange(0, 0);
+        code.scrollTop = 0;
+        code.scrollLeft = 0;
+        lab.querySelector('[data-spring-export-filename]').textContent = exported.filename;
+        lab.querySelector('[data-spring-export-note]').textContent = exported.note;
+        lab.querySelector('[data-spring-export-status]').textContent = '';
+      }
+
+      function setupSpringExport(keepLabVisible) {
+        const lab = document.querySelector('.spring-lab');
+        const details = lab.querySelector('[data-spring-export]');
+        const code = lab.querySelector('[data-spring-export-code]');
+        const status = lab.querySelector('[data-spring-export-status]');
+        lab.querySelector('[data-spring-export-stack]').addEventListener('change', syncSpringExport);
+        details.addEventListener('toggle', () => {
+          requestAnimationFrame(() => {
+            keepLabVisible();
+            if (details.open) {
+              const body = lab.querySelector('.spring-lab-body');
+              body.scrollTop = body.scrollHeight;
+            }
+          });
+        });
+        lab.querySelector('[data-spring-export-copy]').addEventListener('click', async () => {
+          const exported = buildSpringExport(lab.querySelector('[data-spring-export-stack]').value);
+          code.value = exported.code;
+          try {
+            if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(exported.code);
+            status.textContent = '已复制 ' + exported.filename;
+          } catch {
+            code.focus();
+            code.select();
+            status.textContent = '浏览器限制复制，代码已全选；按 Ctrl/Cmd+C，或下载文件。';
+          }
+        });
+        lab.querySelector('[data-spring-export-download]').addEventListener('click', () => {
+          const exported = buildSpringExport(lab.querySelector('[data-spring-export-stack]').value);
+          const url = URL.createObjectURL(new Blob([exported.code], { type: 'text/plain;charset=utf-8' }));
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = exported.filename;
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          status.textContent = '已发起下载 ' + exported.filename;
+        });
+      }
+
+      function replaySpringPreview() {
+        const lab = document.querySelector('.spring-lab');
+        const track = lab.querySelector('.spring-preview');
+        const dot = lab.querySelector('.spring-preview-dot');
+        cancelSpringPreview?.();
+        dot.style.transform = 'translate3d(0, 0, 0)';
+        const distance = Math.max(0, track.clientWidth - dot.offsetWidth - 20);
+        cancelSpringPreview = springValue({
+          from: 0,
+          to: 1,
+          onUpdate(progress) { dot.style.transform = `translate3d(${distance * progress}px, 0, 0)`; },
+          onComplete() { cancelSpringPreview = null; }
+        });
+      }
+
+      function setupSpringLab() {
+        const lab = document.querySelector('.spring-lab');
+        const compact = window.matchMedia('(max-width: 760px)');
+        const handle = lab.querySelector('[data-spring-lab-handle]');
+        const keepLabVisible = () => {
+          if (!lab.hasAttribute('data-positioned')) return;
+          const rect = lab.getBoundingClientRect();
+          setSpringLabPosition(lab, rect.left, rect.top);
+        };
+        setupSpringExport(keepLabVisible);
+        lab.querySelectorAll('[data-motion-mode]').forEach(button => {
+          button.addEventListener('click', () => {
+            currentMotion().mode = button.dataset.motionMode;
+            saveMotionProfiles(); syncSpringLab(); replaySpringPreview();
+            requestAnimationFrame(keepLabVisible);
+          });
+        });
+        lab.querySelectorAll('[data-cubic-input], [data-cubic-number]').forEach(input => {
+          const commit = () => {
+            const key = input.dataset.cubicInput || input.dataset.cubicNumber;
+            const value = Number(input.value);
+            if (input.value.trim() && Number.isFinite(value) && value >= Number(input.min) && value <= Number(input.max)) {
+              currentMotion().cubic[key] = key === 'duration' ? Math.round(value) : value;
+              saveMotionProfiles(); syncSpringLab(); replaySpringPreview();
+            } else syncSpringLab();
+          };
+          input.addEventListener(input.type === 'range' ? 'input' : 'change', commit);
+          if (input.type === 'number') input.addEventListener('keydown', event => { if (event.key === 'Enter') input.blur(); });
+        });
+        lab.querySelectorAll('[data-cubic-preset]').forEach(button => {
+          button.addEventListener('click', () => {
+            Object.assign(currentMotion().cubic, cubicPresets[button.dataset.cubicPreset]);
+            saveMotionProfiles(); syncSpringLab(); replaySpringPreview();
+          });
+        });
+        lab.querySelectorAll('[data-playback-rate]').forEach((button) => {
+          button.addEventListener('click', () => setPlaybackRate(Number(button.dataset.playbackRate)));
+        });
+        if (compact.matches) lab.removeAttribute('data-open');
+        const storedPosition = loadSpringLabPosition();
+        if (storedPosition) setSpringLabPosition(lab, storedPosition.left, storedPosition.top, false);
+        lab.querySelector('[data-spring-target-select]').addEventListener('change', (event) => selectSpringTarget(event.target.value));
+        lab.querySelector('[data-spring-effect-select]').addEventListener('change', (event) => selectSpringEffect(event.target.value));
+        lab.querySelectorAll('[data-spring-input]').forEach((input) => {
+          input.addEventListener('input', () => {
+            const nextValue = settingValue(input);
+            if (nextValue === null) return;
+            springSettings[input.dataset.springInput] = nextValue;
+            saveSpringSettings(); syncSpringLab(); replaySpringPreview();
+          });
+        });
+        lab.querySelectorAll('[data-spring-number]').forEach((input) => {
+          const commit = () => {
+            const nextValue = settingValue(input);
+            if (nextValue === null) return false;
+            springSettings[input.dataset.springNumber] = nextValue;
+            saveSpringSettings(); syncSpringLab(); replaySpringPreview();
+            return true;
+          };
+          input.addEventListener('change', () => { if (!commit()) syncSpringLab(); });
+          input.addEventListener('keydown', (event) => { if (event.key === 'Enter') input.blur(); });
+        });
+        lab.querySelectorAll('[data-spring-preset]').forEach((button) => {
+          button.addEventListener('click', () => {
+            Object.assign(springSettings, springPresets[button.dataset.springPreset]);
+            saveSpringSettings();
+            syncSpringLab();
+            replaySpringPreview();
+          });
+        });
+        lab.querySelector('.spring-lab-toggle').addEventListener('click', () => {
+          lab.toggleAttribute('data-open');
+          syncSpringLab();
+          requestAnimationFrame(keepLabVisible);
+        });
+        handle.addEventListener('pointerdown', (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const rect = lab.getBoundingClientRect();
+          const session = { pointerId: event.pointerId, left: rect.left, top: rect.top, x: event.clientX, y: event.clientY };
+          lab.toggleAttribute('data-dragging', true);
+          handle.setPointerCapture(event.pointerId);
+          const move = (moveEvent) => {
+            if (moveEvent.pointerId !== session.pointerId) return;
+            setSpringLabPosition(lab, session.left + moveEvent.clientX - session.x, session.top + moveEvent.clientY - session.y);
+          };
+          const up = (upEvent) => {
+            if (upEvent.pointerId !== session.pointerId) return;
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            lab.removeAttribute('data-dragging');
+          };
+          window.addEventListener('pointermove', move);
+          window.addEventListener('pointerup', up);
+        });
+        handle.addEventListener('keydown', (event) => {
+          const delta = event.shiftKey ? 40 : 12;
+          const directions = { ArrowLeft: [-delta, 0], ArrowRight: [delta, 0], ArrowUp: [0, -delta], ArrowDown: [0, delta] };
+          const movement = directions[event.key];
+          if (!movement) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = lab.getBoundingClientRect();
+          setSpringLabPosition(lab, rect.left + movement[0], rect.top + movement[1]);
+        });
+        window.addEventListener('resize', () => requestAnimationFrame(keepLabVisible));
+        lab.querySelector('[data-spring-preview]').addEventListener('click', replaySpringPreview);
+        syncSpringLab();
+        requestAnimationFrame(replaySpringPreview);
+      }
+
+      function announce(root, message) {
+        const status = root.querySelector('.live-status');
+        if (status) status.textContent = '';
+        requestAnimationFrame(() => { if (status) status.textContent = message; });
+      }
+
+      function dragGhost(source, event) {
+        const rect = source.getBoundingClientRect();
+        const ghost = source.cloneNode(true);
+        ghost.classList.add('drag-ghost');
+        ghost.removeAttribute('id');
+        ghost.setAttribute('aria-hidden', 'true');
+        // Preserve viewport positioning and grid-stretched size outside the source layout.
+        ghost.style.position = 'fixed';
+        ghost.style.width = `${rect.width}px`;
+        ghost.style.height = `${rect.height}px`;
+        ghost.style.left = `${rect.left}px`;
+        ghost.style.top = `${rect.top}px`;
+        document.body.append(ghost);
+        return { ghost, rect, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
+      }
+
+      function moveGhost(session, event, scale = 1.025) {
+        session.ghost.style.transform = `translate3d(${event.clientX - session.rect.left - session.offsetX}px, ${event.clientY - session.rect.top - session.offsetY}px, 0) scale(${scale})`;
+      }
+
+      function targetAt(event, selector) {
+        return document.elementsFromPoint(event.clientX, event.clientY).find((element) => element.matches?.(selector) || element.closest?.(selector))?.closest?.(selector);
+      }
+
+      function renderLiftList() {
+        return `
+          <section class="variant lift-variant" data-variant="lift">
+            <div class="variant-shell">
+              <p class="eyebrow">Direction 01 · ordered tasks</p>
+              <div class="variant-heading">
+                <div><h1>Lift List</h1><p class="drag-hint"><kbd>Space</kbd> pick up &nbsp; <kbd>↑</kbd><kbd>↓</kbd> reorder &nbsp; <kbd>Enter</kbd> drop</p></div>
+                <p class="variant-summary">A calm, system-native priority list. Lift a task and the stack makes space with a compact, weighted spring.</p>
+              </div>
+              <div class="list-canvas">
+                <div class="list-topline"><strong>Today’s launch list</strong><span>4 priorities</span></div>
+                <div class="task-list" aria-label="Reorder launch tasks">
+                  ${taskCard('lift-qa', 'QA the dark-mode pass', 'Design systems · 14:00', 'Now', 'blue')}
+                  ${taskCard('lift-beta', 'Send the beta invitation', 'Lifecycle · 16:30', 'High', '')}
+                  ${taskCard('lift-research', 'Review first-session notes', 'Research · 18:00', 'Later', 'rose')}
+                  ${taskCard('lift-handoff', 'Package the handoff', 'Engineering · Friday', 'Open', '')}
+                </div>
+              </div>
+            </div>
+            <div class="live-status" aria-live="polite"></div>
+          </section>`;
+      }
+
+      function taskCard(target, title, detail, chip, tone) {
+        return `<article class="list-card" tabindex="0" data-drag-item data-motion-target="${target}" aria-label="${title}. Press Space to pick up.">
+          <span class="grip" aria-hidden="true"></span><div class="task-copy"><strong>${title}</strong><span>${detail}</span></div><span class="task-chip ${tone}">${chip}</span>
+        </article>`;
+      }
+
+      function renderMagneticBoard() {
+        return `
+          <section class="variant board-variant" data-variant="board">
+            <div class="variant-shell">
+              <p class="eyebrow">Direction 02 · spatial flow</p>
+              <div class="variant-heading">
+                <div><h1>Magnetic Board</h1><p class="drag-hint"><kbd>Space</kbd> lift &nbsp; <kbd>←</kbd><kbd>→</kbd> choose lane &nbsp; <kbd>Enter</kbd> drop</p></div>
+                <p class="variant-summary">A visual workflow with an intentional magnetic pull. Targets breathe first; cards settle where the team expects them.</p>
+              </div>
+              <div class="board-meta"><span>Mobile onboarding</span><span>·</span><span>5 active requests</span><div class="avatar-stack" aria-label="Assigned team"><span class="avatar">M</span><span class="avatar">J</span><span class="avatar">S</span></div></div>
+              <div class="kanban-scroll"><div class="kanban" data-board aria-label="Move design requests between workflow lanes">
+                ${boardLane('Inbox', '2', boardCard('RQ-41', 'Accessibility note for account setup', 'Mira', 'blue') + boardCard('RQ-42', 'Refine payment confirmation', 'Jon', 'violet'))}
+                ${boardLane('In progress', '2', boardCard('RQ-37', 'Compress the empty-state narrative', 'Sam', 'rose') + boardCard('RQ-39', 'Name the new saved flow', 'Mira', 'blue'))}
+                ${boardLane('Ready', '1', boardCard('RQ-32', 'Ship the speaker permission explainer', 'Jon', 'violet'))}
+              </div></div>
+            </div>
+            <div class="live-status" aria-live="polite"></div>
+          </section>`;
+      }
+
+      function boardLane(name, count, cards) {
+        return `<section class="kanban-lane" data-lane tabindex="-1" aria-label="${name} lane"><div class="lane-title"><strong>${name}</strong><span>${count}</span></div><div class="board-cards">${cards}</div></section>`;
+      }
+
+      function boardCard(code, title, owner, tone) {
+        return `<article class="board-card" tabindex="0" data-drag-item data-motion-target="board-${code.toLowerCase()}" aria-label="${title}. Press Space to pick up."><div class="ticket-top"><span>${code}</span><span>•••</span></div><h2>${title}</h2><div class="ticket-footer"><span><i class="ticket-dot ${tone}" aria-hidden="true"></i> ${owner}</span><span>Today</span></div></article>`;
+      }
+
+      function renderElasticShelf() {
+        return `
+          <section class="variant shelf-variant" data-variant="shelf">
+            <div class="variant-shell">
+              <p class="eyebrow">Direction 03 · collectible resources</p>
+              <div class="variant-heading">
+                <div><h1>Elastic Shelf</h1><p class="drag-hint"><kbd>Space</kbd> pick up &nbsp; <kbd>←</kbd><kbd>→</kbd> choose shelf / tray &nbsp; <kbd>Enter</kbd> drop</p></div>
+                <p class="variant-summary">A darker, more tactile collection surface. Cards feel physical, with a playful rebound when they join an inspiration tray.</p>
+              </div>
+              <div class="shelf-layout" data-shelf-workspace>
+                <section class="shelf-panel"><header><h2>Motion references</h2><span>6 assets</span></header><div class="shelf-row" data-shelf aria-label="Motion reference shelf">
+                  ${shelfCard('Sequence', 'Exit timing', '04 clips', '#66c6e9')}
+                  ${shelfCard('Color', 'Tonal lift', '12 swatches', '#917cff')}
+                  ${shelfCard('Type', 'Soft display', '03 families', '#ff9f79')}
+                  ${shelfCard('Texture', 'Glass grain', '08 samples', '#57d3a4')}
+                </div></section>
+                <aside class="inspiration-tray" data-tray aria-label="Inspiration tray"><div class="tray-header"><h2>Today’s tray</h2><span data-tray-count>Drop here</span></div><div class="tray-grid" data-tray-grid><div class="tray-empty">Drag a reference here<br />to keep it in reach.</div></div></aside>
+              </div>
+            </div>
+            <div class="live-status" aria-live="polite"></div>
+          </section>`;
+      }
+
+      function shelfCard(type, title, meta, orb) {
+        return `<article class="shelf-card" tabindex="0" data-drag-item data-motion-target="shelf-${type.toLowerCase()}" style="--orb:${orb}" aria-label="${title}. Press Space to pick up."><span class="asset-type">${type}</span><strong>${title}</strong><small>${meta}</small></article>`;
+      }
+
+      function setupLift(root) {
+        const list = root.querySelector('.task-list');
+        let keyboardCard = null;
+        function cards() { return [...list.querySelectorAll('.list-card')]; }
+        function reorder(card, targetIndex) {
+          const all = cards();
+          const currentIndex = all.indexOf(card);
+          if (targetIndex < 0 || targetIndex >= all.length || currentIndex === targetIndex) return false;
+          springFlip(all, () => {
+            const current = cards();
+            const reference = current[targetIndex + (targetIndex > currentIndex ? 1 : 0)];
+            list.insertBefore(card, reference || null);
+          });
+          return true;
+        }
+        cards().forEach((card) => {
+          card.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0 || keyboardCard) return;
+            event.preventDefault();
+            const placeholder = document.createElement('div');
+            placeholder.className = 'list-placeholder';
+            placeholder.style.height = `${card.getBoundingClientRect().height}px`;
+            const session = dragGhost(card, event);
+            card.replaceWith(placeholder);
+            card.classList.add('is-pointer-drag');
+            announce(root, `Picked up ${card.querySelector('strong').textContent}.`);
+            const move = (moveEvent) => {
+              moveGhost(session, moveEvent, 1.018);
+              const siblings = [...list.children].filter((entry) => entry !== placeholder);
+              const next = siblings.find((entry) => moveEvent.clientY < entry.getBoundingClientRect().top + entry.getBoundingClientRect().height / 2);
+              if (next && next.previousElementSibling !== placeholder) springFlip([...list.children], () => list.insertBefore(placeholder, next));
+              if (!next && placeholder !== list.lastElementChild) springFlip([...list.children], () => list.append(placeholder));
+            };
+            const up = () => {
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+              const target = placeholder.getBoundingClientRect();
+              const ghostBox = session.ghost.getBoundingClientRect();
+              placeholder.replaceWith(card);
+              card.classList.remove('is-pointer-drag');
+              card.classList.add('landing');
+              springTransform(card, ghostBox.left - target.left, ghostBox.top - target.top, { opacityFrom: .36, effect: 'landing' }, () => card.classList.remove('landing'));
+              session.ghost.remove();
+              announce(root, `${card.querySelector('strong').textContent} moved to position ${cards().indexOf(card) + 1}.`);
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up, { once: true });
+          });
+          card.addEventListener('keydown', (event) => {
+            if (event.key === ' ' || event.key === 'Enter') {
+              event.preventDefault(); event.stopPropagation();
+              if (!keyboardCard) {
+                keyboardCard = card;
+                card.classList.add('is-key-grabbed');
+                announce(root, `Picked up ${card.querySelector('strong').textContent}. Use up or down arrow to reorder, then Enter to drop.`);
+              } else if (keyboardCard === card) {
+                keyboardCard.classList.remove('is-key-grabbed');
+                announce(root, `${card.querySelector('strong').textContent} dropped at position ${cards().indexOf(card) + 1}.`);
+                keyboardCard = null;
+              }
+              return;
+            }
+            if (!keyboardCard || keyboardCard !== card) return;
+            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+              event.preventDefault(); event.stopPropagation();
+              const index = cards().indexOf(card);
+              const changed = reorder(card, index + (event.key === 'ArrowUp' ? -1 : 1));
+              if (changed) announce(root, `${card.querySelector('strong').textContent} is now position ${cards().indexOf(card) + 1}.`);
+            }
+            if (event.key === 'Escape') { event.stopPropagation(); keyboardCard.classList.remove('is-key-grabbed'); keyboardCard = null; announce(root, 'Reorder cancelled.'); }
+          });
+        });
+      }
+
+      function setupBoard(root) {
+        const board = root.querySelector('[data-board]');
+        const lanes = () => [...board.querySelectorAll('[data-lane]')];
+        let keyboard = null;
+        function cards() { return [...board.querySelectorAll('.board-card')]; }
+        function setTarget(lane) { lanes().forEach((entry) => entry.classList.toggle('is-drop-target', entry === lane)); }
+        function updateCounts() { lanes().forEach((lane) => { lane.querySelector('.lane-title span').textContent = lane.querySelectorAll('.board-card').length; }); }
+        function placeCard(card, lane, before = null) {
+          const source = card.closest('[data-lane]');
+          const destination = lane.querySelector('.board-cards');
+          const alreadyPlaced = source === lane && (before ? card.nextElementSibling === before : card === destination.lastElementChild);
+          if (alreadyPlaced) return false;
+          springFlip(cards(), () => destination.insertBefore(card, before));
+          updateCounts();
+          return true;
+        }
+        function moveCard(card, lane) {
+          if (!placeCard(card, lane)) return;
+          announce(root, `${card.querySelector('h2').textContent} moved to ${lane.querySelector('strong').textContent}.`);
+        }
+        cards().forEach((card) => {
+          card.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0 || keyboard) return;
+            event.preventDefault();
+            const session = dragGhost(card, event);
+            card.classList.add('is-pointer-drag');
+            card.setPointerCapture(event.pointerId);
+            announce(root, `Picked up ${card.querySelector('h2').textContent}.`);
+            const origin = { lane: card.closest('[data-lane]'), next: card.nextElementSibling };
+            let activeLane = null;
+            const move = (moveEvent) => {
+              if (moveEvent.pointerId !== event.pointerId) return;
+              moveGhost(session, moveEvent);
+              const lane = targetAt(moveEvent, '[data-lane]');
+              if (lane !== activeLane) {
+                activeLane = lane;
+                setTarget(activeLane);
+                if (activeLane) placeCard(card, activeLane, activeLane === origin.lane && origin.next?.isConnected ? origin.next : null);
+              }
+            };
+            const up = (upEvent) => {
+              if (upEvent.pointerId !== event.pointerId) return;
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+              const lane = targetAt(upEvent, '[data-lane]');
+              setTarget(null);
+              if (lane) {
+                placeCard(card, lane, lane === origin.lane && origin.next?.isConnected ? origin.next : null);
+                announce(root, `${card.querySelector('h2').textContent} moved to ${lane.querySelector('strong').textContent}.`);
+              } else {
+                placeCard(card, origin.lane, origin.next?.isConnected ? origin.next : null);
+                announce(root, 'No lane selected. Card returned to its original position.');
+              }
+              card.classList.remove('is-pointer-drag');
+              session.ghost.remove();
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+          });
+          card.addEventListener('keydown', (event) => {
+            if ((event.key === ' ' || event.key === 'Enter') && !keyboard) {
+              event.preventDefault(); event.stopPropagation();
+              keyboard = { card, index: lanes().indexOf(card.closest('[data-lane]')) };
+              card.classList.add('is-key-grabbed'); setTarget(lanes()[keyboard.index]);
+              announce(root, `Picked up ${card.querySelector('h2').textContent}. Use left or right arrow to choose a lane, then Enter to drop.`);
+              return;
+            }
+            if (!keyboard || keyboard.card !== card) return;
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault(); event.stopPropagation();
+              keyboard.index = (keyboard.index + (event.key === 'ArrowLeft' ? -1 : 1) + lanes().length) % lanes().length;
+              setTarget(lanes()[keyboard.index]);
+              announce(root, `Target ${lanes()[keyboard.index].querySelector('strong').textContent}.`);
+            }
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault(); event.stopPropagation();
+              const target = lanes()[keyboard.index];
+              card.classList.remove('is-key-grabbed'); setTarget(null); moveCard(card, target); keyboard = null;
+            }
+            if (event.key === 'Escape') { event.stopPropagation(); card.classList.remove('is-key-grabbed'); setTarget(null); keyboard = null; announce(root, 'Move cancelled.'); }
+          });
+        });
+      }
+
+      function setupShelf(root) {
+        const workspace = root.querySelector('[data-shelf-workspace]');
+        const shelf = workspace.querySelector('[data-shelf]');
+        const tray = workspace.querySelector('[data-tray]');
+        const trayGrid = workspace.querySelector('[data-tray-grid]');
+        let keyboard = null;
+        function cards() { return [...workspace.querySelectorAll('.shelf-card')]; }
+        function updateTray() {
+          const trayCards = trayGrid.querySelectorAll('.shelf-card');
+          const empty = trayGrid.querySelector('.tray-empty');
+          if (trayCards.length && empty) empty.remove();
+          if (!trayCards.length && !empty) trayGrid.innerHTML = '<div class="tray-empty">Drag a reference here<br />to keep it in reach.</div>';
+          tray.querySelector('[data-tray-count]').textContent = trayCards.length ? `${trayCards.length} saved` : 'Drop here';
+        }
+        function setTarget(target) { shelf.classList.toggle('is-drop-target', target === shelf); tray.classList.toggle('is-drop-target', target === tray); }
+        function moveCard(card, destination) {
+          const current = card.closest('[data-shelf], [data-tray]');
+          if (current === destination) return;
+          const destinationGrid = destination === tray ? trayGrid : shelf;
+          const empty = trayGrid.querySelector('.tray-empty');
+          springFlip(cards(), () => { if (empty && destination === tray) empty.remove(); destinationGrid.append(card); });
+          updateTray();
+          announce(root, `${card.querySelector('strong').textContent} ${destination === tray ? 'added to today’s tray' : 'returned to the shelf'}.`);
+        }
+        cards().forEach((card) => {
+          card.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0 || keyboard) return;
+            event.preventDefault();
+            const session = dragGhost(card, event);
+            card.classList.add('is-pointer-drag'); card.setPointerCapture(event.pointerId);
+            let active = null;
+            announce(root, `Picked up ${card.querySelector('strong').textContent}.`);
+            const move = (moveEvent) => { moveGhost(session, moveEvent, 1.04); const target = targetAt(moveEvent, '[data-shelf], [data-tray]'); if (target !== active) { active = target; setTarget(active); } };
+            const up = (upEvent) => {
+              card.removeEventListener('pointermove', move); card.removeEventListener('pointerup', up);
+              const target = targetAt(upEvent, '[data-shelf], [data-tray]'); setTarget(null);
+              if (target) moveCard(card, target); else announce(root, 'No destination selected. Card returned to its original location.');
+              card.classList.remove('is-pointer-drag'); session.ghost.remove();
+            };
+            card.addEventListener('pointermove', move); card.addEventListener('pointerup', up, { once: true });
+          });
+          card.addEventListener('keydown', (event) => {
+            if ((event.key === ' ' || event.key === 'Enter') && !keyboard) {
+              event.preventDefault(); event.stopPropagation(); keyboard = { card, target: card.closest('[data-shelf]') ? shelf : tray };
+              card.classList.add('is-key-grabbed'); setTarget(keyboard.target);
+              announce(root, `Picked up ${card.querySelector('strong').textContent}. Use left or right arrow to choose shelf or tray, then Enter to drop.`); return;
+            }
+            if (!keyboard || keyboard.card !== card) return;
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); event.stopPropagation(); keyboard.target = keyboard.target === shelf ? tray : shelf; setTarget(keyboard.target); announce(root, `Target ${keyboard.target === tray ? 'today’s tray' : 'motion references shelf'}.`); }
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); const target = keyboard.target; card.classList.remove('is-key-grabbed'); setTarget(null); moveCard(card, target); keyboard = null; }
+            if (event.key === 'Escape') { event.stopPropagation(); card.classList.remove('is-key-grabbed'); setTarget(null); keyboard = null; announce(root, 'Move cancelled.'); }
+          });
+        });
+      }
+
+      function setupSpringTargetSelection(root) {
+        const selectTargetFromEvent = (event) => {
+          const element = event.target.closest?.('[data-motion-target]');
+          if (element) selectSpringTarget(element.dataset.motionTarget);
+        };
+        root.addEventListener('pointerdown', selectTargetFromEvent, true);
+        root.addEventListener('focusin', selectTargetFromEvent);
+      }
+
+      function setupVariant() {
+        const root = stage.firstElementChild;
+        if (!root) return;
+        setupSpringTargetSelection(root);
+        if (root.dataset.variant === 'lift') setupLift(root);
+        if (root.dataset.variant === 'board') setupBoard(root);
+        if (root.dataset.variant === 'shelf') setupShelf(root);
+        syncSpringLab();
+      }
+
+      const observer = new MutationObserver(setupVariant);
+      observer.observe(document.getElementById('stage'), { childList: true });
+
+      const variants = [renderLiftList, renderMagneticBoard, renderElasticShelf];
+      const stage = document.getElementById('stage');
+      const picker = document.querySelector('.proto-picker');
+      const highlight = picker.querySelector('.proto-picker-highlight');
+      const items = [...picker.querySelectorAll('.proto-picker-item:not(.proto-picker-replay)')];
+      const replay = picker.querySelector('.proto-picker-replay');
+      let current = 0;
+
+      function moveHighlight() {
+        const el = items[current];
+        highlight.style.width = el.offsetWidth + 'px';
+        highlight.style.transform = `translateX(${el.offsetLeft}px)`;
+      }
+
+      function mount(i) {
+        stage.innerHTML = '';
+        // Clear first, render next frame, so entrance animations re-run.
+        requestAnimationFrame(() => { stage.innerHTML = variants[i](); });
+      }
+
+      function setActive(i) {
+        if (i < 0 || i >= variants.length) return;
+        current = i;
+        selectSpringComponent(i);
+        items.forEach((el, j) => {
+          el.toggleAttribute('data-active', j === i);
+          if (j === i) el.setAttribute('aria-current', 'true');
+          else el.removeAttribute('aria-current');
+        });
+        moveHighlight();
+        const url = new URL(location);
+        url.searchParams.set('v', i + 1);
+        history.replaceState(null, '', url);
+        mount(i);
+      }
+
+      items.forEach((el, i) => el.addEventListener('click', () => setActive(i)));
+      replay?.addEventListener('click', () => mount(current));
+      window.addEventListener('resize', moveHighlight);
+
+      document.addEventListener('keydown', (e) => {
+        if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+        if (e.target.closest('.spring-lab')) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const num = parseInt(e.key, 10);
+        if (num >= 1 && num <= variants.length) setActive(num - 1);
+        else if (e.key === 'ArrowRight') setActive((current + 1) % variants.length);
+        else if (e.key === 'ArrowLeft') setActive((current - 1 + variants.length) % variants.length);
+        else if (e.key === 'r' || e.key === 'R') mount(current);
+      });
+
+      setupSpringLab();
+      setActive((parseInt(new URLSearchParams(location.search).get('v'), 10) || 1) - 1);
+      // Enable the slide only after first paint, so load doesn't animate.
+      requestAnimationFrame(() => requestAnimationFrame(() => picker.setAttribute('data-ready', '')));
+    </script>
+  </body>
+</html>

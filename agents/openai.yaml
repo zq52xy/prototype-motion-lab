@@ -1,0 +1,7 @@
+interface:
+  display_name: "Prototype Motion Lab"
+  short_description: "Build per-effect Spring and Cubic tuning panels"
+  default_prompt: "Use $prototype-motion-lab to add an animation tuning panel to this prototype."
+
+policy:
+  allow_implicit_invocation: true
