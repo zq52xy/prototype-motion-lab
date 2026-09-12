@@ -8,6 +8,21 @@ Tune Spring and Cubic Bézier motion inside a real interactive prototype—not i
 
 `prototype-motion-lab` is a Codex Skill for building an in-page motion control panel. It keeps settings independent for every real `component / target / effect`, preserves direct pointer tracking, and makes the selected motion easy to preview, slow down, inspect, persist, and export.
 
+## Why this exists
+
+Prototype motion is often tuned outside the interface, buried in code, or reduced to one easing value shared by unrelated elements. That approach breaks down when list reflow, release landing, and target changes need different feedback. Pointer-held content must respond directly, while autonomous motion after release needs its own Spring or Cubic timing. This Skill puts the controls inside the prototype so motion can be judged in the layout, content, and interaction where people will actually experience it.
+
+## Problems it solves
+
+| Problem | What the motion lab changes |
+| --- | --- |
+| One global curve changes every component | Stores a separate profile for each real `componentId / targetId / effectId`. |
+| Applying Spring while an item is held makes dragging lag behind the pointer | Keeps direct manipulation under the pointer and applies timing only to autonomous motion such as reflow or landing. |
+| Abstract parameters are hard to judge at normal speed | Combines manual millisecond values, curve visualization, draggable Cubic handles, live preview, and four slow-play rates. |
+| A fixed inspector covers the interface being evaluated | Makes the panel movable, collapsible, scrollable, and bounded to the viewport. |
+| Switching objects or refreshing the page loses carefully tuned values | Persists independent Spring and Cubic profiles without collapsing them into global state. |
+| Motion intent gets handed off as screenshots or vague numbers | Exports only the selected effect for Web, Motion for React, SwiftUI, or Jetpack Compose and states where native solvers may differ. |
+
 ## Highlights
 
 - Apple-style Spring controls with response in milliseconds, damping fraction, and initial velocity.

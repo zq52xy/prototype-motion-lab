@@ -97,14 +97,19 @@ for (const readmeName of ['README.md', 'README.zh-CN.md']) {
   }
 }
 
-if (fs.existsSync(file('README.md')) && !/\[简体中文\]\(README\.zh-CN\.md\)/.test(fs.readFileSync(file('README.md'), 'utf8'))) {
-  fail('README.md must link to README.zh-CN.md');
+if (fs.existsSync(file('README.md'))) {
+  const englishReadme = fs.readFileSync(file('README.md'), 'utf8');
+  if (!/\[简体中文\]\(README\.zh-CN\.md\)/.test(englishReadme)) fail('README.md must link to README.zh-CN.md');
+  if (!/^## Why this exists$/m.test(englishReadme)) fail('README.md must explain why the project exists');
+  if (!/^## Problems it solves$/m.test(englishReadme)) fail('README.md must explain the problems it solves');
 }
 
 if (fs.existsSync(file('README.zh-CN.md'))) {
   const chineseReadme = fs.readFileSync(file('README.zh-CN.md'), 'utf8');
   if (!/\[English\]\(README\.md\)/.test(chineseReadme)) fail('README.zh-CN.md must link to README.md');
   if (!/[\u3400-\u9fff]/.test(chineseReadme)) fail('README.zh-CN.md must contain Simplified Chinese content');
+  if (!/^## 为什么做这个$/m.test(chineseReadme)) fail('README.zh-CN.md must explain why the project exists');
+  if (!/^## 解决了什么问题$/m.test(chineseReadme)) fail('README.zh-CN.md must explain the problems it solves');
 }
 
 if (failures.length) {
