@@ -1,5 +1,7 @@
 # Prototype Motion Lab
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Tune Spring and Cubic Bézier motion inside a real interactive prototype—not in a disconnected easing playground.
 
 ![Priority Orbit with draggable Cubic Bézier handles](docs/images/priority-orbit-cubic-handles-desktop.png)
@@ -75,6 +77,8 @@ Read [SKILL.md](SKILL.md) for routing and [the motion lab contract](references/m
 ```text
 prototype-motion-lab/
 ├── SKILL.md
+├── README.md
+├── README.zh-CN.md
 ├── agents/openai.yaml
 ├── assets/drag-spring-motion-lab.html
 ├── examples/priority-orbit-motion-lab.html
@@ -101,4 +105,4 @@ The included HTML files are standalone prototypes and implementation references,
 
 ## Publishing and license
 
-See [the publishing checklist](docs/PUBLISHING.md) before making the repository public. No license is included yet; the repository owner should choose one before public release.
+See [the publishing checklist](docs/PUBLISHING.md) for release guidance. This repository is public, but no license is included yet; public visibility alone does not grant permission to reuse the code. The repository owner should choose a license before presenting it as open source.

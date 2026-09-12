@@ -6,6 +6,7 @@ const failures = [];
 const required = [
   'SKILL.md',
   'README.md',
+  'README.zh-CN.md',
   'agents/openai.yaml',
   'references/motion-lab-contract.md',
   'assets/drag-spring-motion-lab.html',
@@ -84,15 +85,26 @@ for (const relative of required.filter(name => /\.(?:png|jpe?g)$/i.test(name))) 
   if (size.width < 390 || size.height < 700) fail(`Screenshot is too small: ${relative} ${size.width}x${size.height}`);
 }
 
-if (fs.existsSync(file('README.md'))) {
-  const readme = fs.readFileSync(file('README.md'), 'utf8');
+for (const readmeName of ['README.md', 'README.zh-CN.md']) {
+  if (!fs.existsSync(file(readmeName))) continue;
+  const readme = fs.readFileSync(file(readmeName), 'utf8');
   const links = [...readme.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)].map(match => match[1].split('#')[0]).filter(Boolean);
   const imageLinks = [...readme.matchAll(/!\[[^\]]+\]\(([^)]+\.(?:png|jpe?g))\)/gi)].map(match => match[1]);
-  if (imageLinks.length < 4) fail(`README must embed at least four case screenshots; found ${imageLinks.length}`);
+  if (imageLinks.length < 4) fail(`${readmeName} must embed at least four case screenshots; found ${imageLinks.length}`);
   for (const link of links) {
     if (/^(?:https?:|mailto:)/i.test(link)) continue;
-    if (!fs.existsSync(path.resolve(root, decodeURIComponent(link)))) fail(`Broken README link: ${link}`);
+    if (!fs.existsSync(path.resolve(root, decodeURIComponent(link)))) fail(`Broken ${readmeName} link: ${link}`);
   }
+}
+
+if (fs.existsSync(file('README.md')) && !/\[简体中文\]\(README\.zh-CN\.md\)/.test(fs.readFileSync(file('README.md'), 'utf8'))) {
+  fail('README.md must link to README.zh-CN.md');
+}
+
+if (fs.existsSync(file('README.zh-CN.md'))) {
+  const chineseReadme = fs.readFileSync(file('README.zh-CN.md'), 'utf8');
+  if (!/\[English\]\(README\.md\)/.test(chineseReadme)) fail('README.zh-CN.md must link to README.md');
+  if (!/[\u3400-\u9fff]/.test(chineseReadme)) fail('README.zh-CN.md must contain Simplified Chinese content');
 }
 
 if (failures.length) {
